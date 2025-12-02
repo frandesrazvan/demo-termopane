@@ -6,7 +6,8 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+// 1. Change import from BrowserRouter to HashRouter
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useState } from 'react';
 
 type Page = 'settings' | 'quotes' | 'new-quote';
@@ -35,11 +36,11 @@ function AppShell() {
 }
 
 export default function App() {
-  // Get base path from environment or use default
-  const basePath = import.meta.env.BASE_URL || '/';
+  // We don't need the base path logic for HashRouter, it works automatically
   
   return (
-    <BrowserRouter basename={basePath}>
+    // 2. Use HashRouter here. No basename prop needed.
+    <HashRouter>
       <AuthProvider>
         <Routes>
           <Route
@@ -55,7 +56,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
-
