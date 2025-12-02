@@ -2,9 +2,13 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // Get base path from environment variable for GitHub Pages
-// In GitHub Actions, GITHUB_PAGES will be 'true' and GITHUB_REPOSITORY_NAME will be set
 const repoName = process.env.GITHUB_REPOSITORY_NAME || 'demo-termopane';
 const base = process.env.GITHUB_PAGES === 'true' ? `/${repoName}/` : '/';
+
+// Debug logging
+if (process.env.GITHUB_PAGES === 'true') {
+  console.log(`[Vite Config] Building for GitHub Pages with base: ${base}`);
+}
 
 export default defineConfig({
   plugins: [react()],
@@ -12,6 +16,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
+    rollupOptions: {
+      output: {
+        // Ensure assets use the base path
+        assetFileNames: 'assets/[name].[hash][extname]',
+        chunkFileNames: 'assets/[name].[hash].js',
+        entryFileNames: 'assets/[name].[hash].js',
+      },
+    },
   },
   optimizeDeps: {
     exclude: ['lucide-react'],
