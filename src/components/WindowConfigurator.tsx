@@ -447,7 +447,6 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
 
         if (sash.openingType === 'turn' || sash.openingType === 'tilt-turn') {
           // Turn triangle: tip points to handle side, base on hinge side
-          const triangleSize = Math.min(sashInnerWidth * 0.3, sashInnerHeight * 0.3);
           const triangleTipX = handleSide - PROFILE_WIDTH / 2;
           const triangleBaseX = hingeSide + PROFILE_WIDTH / 2;
           const triangleTopY = sashInnerY + PROFILE_WIDTH / 2;

@@ -2,9 +2,8 @@ import { useEffect, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 // @ts-ignore - jspdf-autotable doesn't have proper types
 import autoTable from 'jspdf-autotable';
-import { Quote, Window, OpeningType } from '../types';
+import { Quote, OpeningType } from '../types';
 import { X, Download } from 'lucide-react';
-import { exportQuoteToPDF } from '../utils/pdfExport';
 
 const getOpeningTypeLabel = (type: OpeningType): string => {
   switch (type) {
@@ -164,7 +163,6 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
       const glass = settings.glassTypes.find((g: any) => g.id === window.glassTypeId);
       const hardware = settings.hardwareOptions.find((h: any) => h.id === window.hardwareId);
       const isDoor = quote.productType === 'door';
-      const productLabel = isDoor ? 'Ușă' : quote.productType === 'other' ? 'Alt Produs' : 'Fereastră';
 
       // Product identifier
       doc.setFontSize(12);
@@ -175,7 +173,6 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
       // Two-column layout: Drawing on left, specs on right
       const leftColWidth = 80;
       const rightColX = margin + leftColWidth + 10;
-      const rightColWidth = pageWidth - rightColX - margin;
       const drawingHeight = 60;
 
       // Technical drawing (left side)

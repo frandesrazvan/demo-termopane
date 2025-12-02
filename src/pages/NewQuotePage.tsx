@@ -46,6 +46,10 @@ export default function NewQuotePage({ onSave }: NewQuotePageProps) {
       return;
     }
 
+    if (!windowConfig) {
+      return; // Should never happen due to validation above, but TypeScript needs this
+    }
+
     setErrors([]);
 
     // Create sashes for the window

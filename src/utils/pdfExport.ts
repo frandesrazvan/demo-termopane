@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 // @ts-ignore - jspdf-autotable doesn't have proper types
 import autoTable from 'jspdf-autotable';
-import { Quote, Window, OpeningType } from '../types';
+import { Quote, OpeningType } from '../types';
 
 const getOpeningTypeLabel = (type: OpeningType): string => {
   switch (type) {
@@ -102,7 +102,6 @@ export const exportQuoteToPDF = (quote: Quote, settings: any) => {
     month: '2-digit',
     day: '2-digit',
   }).replace(/\//g, '/');
-  const monthYear = `${dateObj.getMonth() + 1}/${dateObj.getFullYear()}`;
 
   // Header - Top section
   doc.setFontSize(9);
@@ -153,7 +152,6 @@ export const exportQuoteToPDF = (quote: Quote, settings: any) => {
     const glass = settings.glassTypes.find((g: any) => g.id === window.glassTypeId);
     const hardware = settings.hardwareOptions.find((h: any) => h.id === window.hardwareId);
     const isDoor = quote.productType === 'door';
-    const productLabel = isDoor ? 'Ușă' : quote.productType === 'other' ? 'Alt Produs' : 'Fereastră';
 
     // Product identifier
     doc.setFontSize(12);
@@ -164,7 +162,6 @@ export const exportQuoteToPDF = (quote: Quote, settings: any) => {
     // Two-column layout: Drawing on left, specs on right
     const leftColWidth = 80;
     const rightColX = margin + leftColWidth + 10;
-    const rightColWidth = pageWidth - rightColX - margin;
     const drawingHeight = 60;
 
     // Technical drawing (left side)
