@@ -1,18 +1,11 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// Get base path from environment variable or use default
-// For GitHub Pages, set GITHUB_REPOSITORY_NAME to your repo name
-// Example: GITHUB_REPOSITORY_NAME=demo-termopane
+// Get base path from environment variable for GitHub Pages
+// In GitHub Actions, GITHUB_PAGES will be 'true' and GITHUB_REPOSITORY_NAME will be set
 const repoName = process.env.GITHUB_REPOSITORY_NAME || 'demo-termopane';
 const base = process.env.GITHUB_PAGES === 'true' ? `/${repoName}/` : '/';
 
-// Log for debugging (only in build, not in dev)
-if (process.env.GITHUB_PAGES === 'true') {
-  console.log(`Building with base path: ${base}`);
-}
-
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   base,

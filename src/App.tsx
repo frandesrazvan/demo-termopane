@@ -6,8 +6,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
-// 1. Change import from BrowserRouter to HashRouter
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useState } from 'react';
 
 type Page = 'settings' | 'quotes' | 'new-quote';
@@ -36,11 +35,11 @@ function AppShell() {
 }
 
 export default function App() {
-  // We don't need the base path logic for HashRouter, it works automatically
+  // Get base path from Vite's BASE_URL (automatically set based on vite.config.ts base option)
+  const basePath = import.meta.env.BASE_URL;
   
   return (
-    // 2. Use HashRouter here. No basename prop needed.
-    <HashRouter>
+    <BrowserRouter basename={basePath}>
       <AuthProvider>
         <Routes>
           <Route
@@ -56,6 +55,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
-    </HashRouter>
+    </BrowserRouter>
   );
 }
