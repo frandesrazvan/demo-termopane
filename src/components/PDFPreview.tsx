@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 // @ts-ignore - jspdf-autotable doesn't have proper types
 import autoTable from 'jspdf-autotable';
-import { Quote, OpeningType } from '../types';
+import { OpeningType } from '../types';
+import { QuoteWithItems } from '../types/quotes';
 import { X, Download } from 'lucide-react';
 
 const getOpeningTypeLabel = (type: OpeningType): string => {
@@ -28,7 +29,8 @@ const drawTechnicalDrawing = (
   windowWidth: number,
   windowHeight: number,
   isDoor: boolean,
-  sashCount: number
+  sashCount: number,
+  fillTypes?: ('glass' | 'panel')[]
 ) => {
   const scale = Math.min(width / windowWidth, height / windowHeight) * 0.8;
   const scaledWidth = windowWidth * scale;
@@ -49,18 +51,43 @@ const drawTechnicalDrawing = (
     }
   }
 
-  // Draw glass/panel fill (light blue for glass, white for panel)
-  doc.setFillColor(224, 242, 254);
-  doc.setDrawColor(200, 200, 200);
-  doc.setLineWidth(0.5);
+  // Draw glass/panel fill per sash
   const innerMargin = 5;
-  doc.rect(
-    startX + innerMargin,
-    startY + innerMargin,
-    scaledWidth - 2 * innerMargin,
-    scaledHeight - 2 * innerMargin,
-    'FD'
-  );
+  if (sashCount > 1 && fillTypes && fillTypes.length === sashCount) {
+    const sashWidth = scaledWidth / sashCount;
+    fillTypes.forEach((fillType, idx) => {
+      const sashX = startX + idx * sashWidth;
+      if (fillType === 'panel') {
+        // White fill for panel
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(200, 200, 200);
+      } else {
+        // Light blue for glass
+        doc.setFillColor(224, 242, 254);
+        doc.setDrawColor(200, 200, 200);
+      }
+      doc.setLineWidth(0.5);
+      doc.rect(
+        sashX + innerMargin,
+        startY + innerMargin,
+        sashWidth - 2 * innerMargin,
+        scaledHeight - 2 * innerMargin,
+        'FD'
+      );
+    });
+  } else {
+    // Single sash or no fill type info - default to glass
+    doc.setFillColor(224, 242, 254);
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.5);
+    doc.rect(
+      startX + innerMargin,
+      startY + innerMargin,
+      scaledWidth - 2 * innerMargin,
+      scaledHeight - 2 * innerMargin,
+      'FD'
+    );
+  }
 
   // Dimensions
   doc.setFontSize(8);
@@ -90,7 +117,7 @@ const drawTechnicalDrawing = (
 };
 
 interface PDFPreviewProps {
-  quote: Quote;
+  quote: QuoteWithItems;
   settings: any;
   onClose: () => void;
 }
@@ -107,7 +134,7 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
 
     // Generate offer number from quote ID
     const offerNumber = quote.id.slice(-4) || '0001';
-    const dateObj = new Date(quote.createdAt);
+    const dateObj = new Date(quote.created_at);
     const dateStr = dateObj.toLocaleDateString('ro-RO', {
       year: 'numeric',
       month: '2-digit',
@@ -145,9 +172,9 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
     doc.text('Va prezentam oferta noastra de pret:', margin, yPos);
     yPos += 15;
 
-    // Process each window/product
-    quote.windows.forEach((window, windowIndex) => {
-      if (windowIndex > 0) {
+    // Process each item
+    quote.items.forEach((item, itemIndex) => {
+      if (itemIndex > 0) {
         doc.addPage();
         yPos = margin;
         // Re-add header for new page
@@ -159,15 +186,18 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
         yPos += 25;
       }
 
-      const profile = settings.profileSeries.find((p: any) => p.id === window.profileSeriesId);
-      const glass = settings.glassTypes.find((g: any) => g.id === window.glassTypeId);
-      const hardware = settings.hardwareOptions.find((h: any) => h.id === window.hardwareId);
-      const isDoor = quote.productType === 'door';
+      const config = item.configuration;
+      const profile = settings.profileSeries.find((p: any) => p.id === config.selectedProfileId);
+      const glass = settings.glassTypes.find((g: any) => g.id === config.selectedGlassId);
+      const hardware = settings.hardwareOptions.find((h: any) => h.id === config.selectedHardwareId);
+      const isDoor = item.item_type === 'door';
 
       // Product identifier
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
-      doc.text(`${quote.clientName.toUpperCase()}${windowIndex + 1} / ${quote.windows.length} Buc`, margin, yPos);
+      const itemLabel = item.label || `${item.item_type === 'window' ? 'Fereastră' : item.item_type === 'door' ? 'Ușă' : 'Articol'}`;
+      const clientName = quote.client_name || 'Client';
+      doc.text(`${clientName.toUpperCase()} - ${itemLabel.toUpperCase()} ${itemIndex + 1} / ${quote.items.length} Buc (Cant: ${item.quantity})`, margin, yPos);
       yPos += 10;
 
       // Two-column layout: Drawing on left, specs on right
@@ -176,16 +206,18 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
       const drawingHeight = 60;
 
       // Technical drawing (left side)
+      const fillTypes = config.sashes.map(s => s.fillType);
       drawTechnicalDrawing(
         doc,
         margin,
         yPos,
         leftColWidth,
         drawingHeight,
-        window.width,
-        window.height,
+        item.width_mm,
+        item.height_mm,
         isDoor,
-        window.sashes.length
+        config.sashCount,
+        fillTypes
       );
 
       // Specifications (right side)
@@ -202,11 +234,11 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
       specY += 5;
 
       // Color
-      if (window.color) {
+      if (config.selectedColor) {
         doc.setFont('helvetica', 'bold');
         doc.text('Culoare (ext/int):', rightColX, specY);
         doc.setFont('helvetica', 'normal');
-        doc.text(window.color, rightColX + 40, specY);
+        doc.text(config.selectedColor, rightColX + 40, specY);
         specY += 5;
       }
 
@@ -231,11 +263,11 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
       doc.setFont('helvetica', 'bold');
       doc.text('Dimensiuni:', rightColX, specY);
       doc.setFont('helvetica', 'normal');
-      doc.text(`${window.width} × ${window.height} mm`, rightColX + 30, specY);
+      doc.text(`${item.width_mm} × ${item.height_mm} mm`, rightColX + 30, specY);
       specY += 5;
 
       // Surface area
-      const surfaceArea = ((window.width * window.height) / 1000000).toFixed(2);
+      const surfaceArea = ((item.width_mm * item.height_mm) / 1000000).toFixed(2);
       doc.setFont('helvetica', 'bold');
       doc.text('Suprafata:', rightColX, specY);
       doc.setFont('helvetica', 'normal');
@@ -252,15 +284,17 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
       }
 
       // Sash details
-      if (window.sashes.length > 0) {
+      if (config.sashes.length > 0) {
         doc.setFont('helvetica', 'bold');
         doc.text('Compartimente:', rightColX, specY);
         specY += 5;
-        window.sashes.forEach((sash, idx) => {
+        const sashWidth = item.width_mm / config.sashCount;
+        config.sashes.forEach((sash, idx) => {
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(8);
+          const fillTypeLabel = sash.fillType === 'panel' ? ' (Panel PVC)' : '';
           doc.text(
-            `  ${idx + 1}. ${sash.width.toFixed(0)}×${sash.height.toFixed(0)}mm - ${getOpeningTypeLabel(sash.openingType)}`,
+            `  ${idx + 1}. ${sashWidth.toFixed(0)}×${item.height_mm.toFixed(0)}mm - ${getOpeningTypeLabel(sash.openingType)}${fillTypeLabel}`,
             rightColX + 5,
             specY
           );
@@ -270,80 +304,62 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
 
       yPos += drawingHeight + 10;
 
-      // Calculate pricing
-      const perimeterMeters = (window.width * 2 + window.height * 2) / 1000;
-      const glassAreaSqMeters = (window.width * window.height) / 1000000;
-      const profileCost = perimeterMeters * (profile?.pricePerMeter || 0);
-      const glassCost = glassAreaSqMeters * (glass?.pricePerSqMeter || 0);
-      const hardwareCost = window.sashes.reduce((sum, sash) => {
-        if (!hardware) return sum;
-        if (sash.openingType === 'turn') return sum + hardware.pricePerTurn;
-        if (sash.openingType === 'tilt-turn') return sum + hardware.pricePerTiltTurn;
-        return sum;
-      }, 0);
+      // Use stored pricing from item
+      const baseCost = item.base_cost;
+      const sellingPrice = item.price_without_vat;
+      const vatAmount = item.total_with_vat - item.price_without_vat;
+      const finalPriceWithVAT = item.total_with_vat;
+      const itemTotal = finalPriceWithVAT * item.quantity;
 
-      const baseMaterialsCost = profileCost + glassCost + hardwareCost;
-      const laborCost = (baseMaterialsCost * quote.laborPercentage) / 100;
-      const baseCost = quote.baseCost ?? (baseMaterialsCost + laborCost);
-
-      const markupPercent = quote.markupPercent ?? 0;
-      const markupFixed = quote.markupFixed ?? 0;
-      const discountPercent = quote.discountPercent ?? 0;
-      const discountFixed = quote.discountFixed ?? 0;
-
-      const priceWithMarkup = baseCost * (1 + markupPercent / 100) + markupFixed;
-      const discountPercentAmount = priceWithMarkup * (discountPercent / 100);
-      const totalDiscount = discountPercentAmount + discountFixed;
-      const sellingPrice = quote.sellingPrice ?? Math.max(priceWithMarkup - totalDiscount, 0);
-      const vatAmount = quote.vatAmount ?? (sellingPrice * 0.19);
-      const finalPriceWithVAT = quote.finalPriceWithVAT ?? (sellingPrice * 1.19);
-
-      // Pricing section - only on last window
-      if (windowIndex === quote.windows.length - 1) {
-        // Summary section
+      // Pricing section - only on last item
+      if (itemIndex === quote.items.length - 1) {
+        // Summary section for all items
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text(`Suprafata ${surfaceArea} m²`, margin, yPos);
+        
+        // Show item summary
+        quote.items.forEach((qItem, qIdx) => {
+          const qSurfaceArea = ((qItem.width_mm * qItem.height_mm) / 1000000).toFixed(2);
+          doc.text(`Articol ${qIdx + 1}: ${qItem.label || 'Fără denumire'} - ${qSurfaceArea} m² × ${qItem.quantity} buc = ${(qItem.total_with_vat * qItem.quantity).toFixed(2)} RON`, margin, yPos);
+          yPos += 5;
+        });
+        
         yPos += 5;
-        doc.text(`Pret unitar ${finalPriceWithVAT.toFixed(2)} RON`, margin, yPos);
-        yPos += 5;
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Valoare totala ${baseCost.toFixed(2)} RON`, margin, yPos);
-        yPos += 15;
 
-        // Commercial pricing dashboard (right side)
+        // Commercial pricing dashboard (right side) - totals for entire quote
         const pricingX = pageWidth - margin - 80;
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
-        doc.text('Total:', pricingX, yPos);
+        doc.text('Subtotal:', pricingX, yPos);
         doc.setFont('helvetica', 'normal');
-        doc.text(`${baseCost.toFixed(2)} RON`, pageWidth - margin, yPos, { align: 'right' });
+        doc.text(`${quote.subtotal.toFixed(2)} RON`, pageWidth - margin, yPos, { align: 'right' });
         yPos += 6;
 
-        if (discountPercent > 0 || discountFixed > 0) {
+        if (quote.discount_total > 0) {
           doc.setFont('helvetica', 'bold');
-          doc.text(`Discount ${discountPercent > 0 ? discountPercent + '%' : ''}${discountPercent > 0 && discountFixed > 0 ? ' + ' : ''}${discountFixed > 0 ? discountFixed.toFixed(2) + ' RON' : ''}:`, pricingX, yPos);
+          doc.text('Discount:', pricingX, yPos);
           doc.setFont('helvetica', 'normal');
-          doc.text(`-${totalDiscount.toFixed(2)} RON`, pageWidth - margin, yPos, { align: 'right' });
+          doc.text(`-${quote.discount_total.toFixed(2)} RON`, pageWidth - margin, yPos, { align: 'right' });
           yPos += 6;
         }
 
         doc.setFont('helvetica', 'bold');
-        doc.text('Valoare:', pricingX, yPos);
+        doc.text('Valoare fără TVA:', pricingX, yPos);
         doc.setFont('helvetica', 'normal');
-        doc.text(`${sellingPrice.toFixed(2)} RON`, pageWidth - margin, yPos, { align: 'right' });
+        const priceAfterDiscount = quote.subtotal - quote.discount_total;
+        doc.text(`${priceAfterDiscount.toFixed(2)} RON`, pageWidth - margin, yPos, { align: 'right' });
         yPos += 6;
 
         doc.setFont('helvetica', 'bold');
-        doc.text('Cota TVA 19%:', pricingX, yPos);
+        doc.text(`Cota TVA ${(quote.vat_rate * 100).toFixed(0)}%:`, pricingX, yPos);
         doc.setFont('helvetica', 'normal');
-        doc.text(`${vatAmount.toFixed(2)} RON`, pageWidth - margin, yPos, { align: 'right' });
+        doc.text(`${quote.vat_amount.toFixed(2)} RON`, pageWidth - margin, yPos, { align: 'right' });
         yPos += 6;
 
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.text('Valoare lucrare:', pricingX, yPos);
-        doc.text(`${finalPriceWithVAT.toFixed(2)} RON`, pageWidth - margin, yPos, { align: 'right' });
+        doc.text(`${quote.total.toFixed(2)} RON`, pageWidth - margin, yPos, { align: 'right' });
         yPos += 15;
       }
     });
@@ -382,7 +398,15 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
         
         // Client address
         doc.setFont('helvetica', 'normal');
-        doc.text(`Adresa client: ${quote.clientName}`, margin, termsY + 30);
+        const clientInfo = [
+          quote.client_name && `Nume: ${quote.client_name}`,
+          quote.client_address && `Adresă: ${quote.client_address}`,
+          quote.client_phone && `Telefon: ${quote.client_phone}`,
+          quote.client_email && `Email: ${quote.client_email}`,
+        ].filter(Boolean).join(' | ');
+        if (clientInfo) {
+          doc.text(`Client: ${clientInfo}`, margin, termsY + 30);
+        }
         
         // Closing
         doc.setFont('helvetica', 'normal');
@@ -411,7 +435,8 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
 
   const handleExport = () => {
     const doc = generatePDF();
-    const fileName = `Oferta_${quote.clientName.replace(/\s+/g, '_')}_${new Date(quote.createdAt).toISOString().split('T')[0]}.pdf`;
+    const clientName = quote.client_name || 'Client';
+    const fileName = `Oferta_${clientName.replace(/\s+/g, '_')}_${new Date(quote.created_at).toISOString().split('T')[0]}.pdf`;
     doc.save(fileName);
   };
 

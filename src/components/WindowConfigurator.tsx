@@ -382,8 +382,8 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
               stroke="#d1d5db"
               strokeWidth={1}
               strokeDasharray="4 4"
-            />
-          );
+          />
+        );
         }
       } else {
         // Opening window - draw inner sash rectangle
@@ -436,8 +436,8 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
               stroke="#d1d5db"
               strokeWidth={1}
               strokeDasharray="4 4"
-            />
-          );
+          />
+        );
         }
 
         // Opening triangles
@@ -805,17 +805,17 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
                     Compartiment {index + 1}
                   </label>
                   <div className="space-y-2">
-                    <select
-                      value={sash.openingType}
-                      onChange={(e) =>
-                        handleSashOpeningTypeChange(sash.id, e.target.value as OpeningType)
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                    >
-                      <option value="fixed">Fix</option>
-                      <option value="turn">Deschidere</option>
-                      <option value="tilt-turn">Oscilobatant</option>
-                    </select>
+                  <select
+                    value={sash.openingType}
+                    onChange={(e) =>
+                      handleSashOpeningTypeChange(sash.id, e.target.value as OpeningType)
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  >
+                    <option value="fixed">Fix</option>
+                    <option value="turn">Deschidere</option>
+                    <option value="tilt-turn">Oscilobatant</option>
+                  </select>
                     <select
                       value={sash.fillType}
                       onChange={(e) =>
@@ -839,17 +839,17 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
               Tip Deschidere
             </label>
             <div className="grid grid-cols-2 gap-4">
-              <select
-                value={sashes[0].openingType}
+            <select
+              value={sashes[0].openingType}
                 onChange={(e) =>
                   handleSashOpeningTypeChange(sashes[0].id, e.target.value as OpeningType)
                 }
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="fixed">Fix</option>
-                <option value="turn">Deschidere</option>
-                <option value="tilt-turn">Oscilobatant</option>
-              </select>
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="fixed">Fix</option>
+              <option value="turn">Deschidere</option>
+              <option value="tilt-turn">Oscilobatant</option>
+            </select>
               <select
                 value={sashes[0].fillType}
                 onChange={(e) =>
@@ -912,11 +912,11 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
                     </div>
                   </div>
                   <div className="border-t border-gray-200 pt-2 mt-2">
-                    <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center">
                       <span className="text-base font-semibold text-gray-700">Total Cost Materiale:</span>
                       <span className="text-xl font-bold text-blue-700">
                         {baseCost.toFixed(2)} RON
-                      </span>
+                    </span>
                     </div>
                   </div>
                 </div>
@@ -981,15 +981,15 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
                 <div className="border border-gray-200 rounded-lg p-4">
                   <h3 className="text-sm font-semibold text-gray-800 mb-3">Detalii Preț</h3>
                   <div className="space-y-2 text-sm text-gray-700">
-                    <div className="flex justify-between">
+                  <div className="flex justify-between">
                       <span>Preț Materiale:</span>
                       <span>{baseCost.toFixed(2)} RON</span>
-                    </div>
-                    <div className="flex justify-between">
+                  </div>
+                  <div className="flex justify-between">
                       <span>Adaos:</span>
                       <span>{markupAmount.toFixed(2)} RON</span>
-                    </div>
-                    <div className="flex justify-between">
+                  </div>
+                  <div className="flex justify-between">
                       <span>Discount:</span>
                       <span>-{totalDiscount.toFixed(2)} RON</span>
                     </div>

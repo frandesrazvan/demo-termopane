@@ -1,16 +1,91 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { FileText, Calendar, Eye } from 'lucide-react';
+import { quotesApi } from '../lib/quotesApi';
+import { Quote, QuoteWithItems } from '../types/quotes';
+import { FileText, Eye, Trash2, Info, Loader2 } from 'lucide-react';
 import PDFPreview from '../components/PDFPreview';
-import { Quote } from '../types';
 
 export default function QuotesPage() {
-  const quotes = useStore((state) => state.quotes);
   const settings = useStore((state) => state.settings);
-  const [previewQuote, setPreviewQuote] = useState<Quote | null>(null);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [previewQuote, setPreviewQuote] = useState<QuoteWithItems | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const handleViewPDF = (quote: Quote) => {
-    setPreviewQuote(quote);
+  useEffect(() => {
+    loadQuotes();
+  }, []);
+
+  const loadQuotes = async () => {
+    try {
+      setIsLoading(true);
+      const fetchedQuotes = await quotesApi.fetchQuotes();
+      setQuotes(fetchedQuotes);
+    } catch (error) {
+      console.error('Error loading quotes:', error);
+      // TODO: Show error message to user
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleViewPDF = async (quoteId: string) => {
+    try {
+      const quoteWithItems = await quotesApi.fetchQuoteWithItems(quoteId);
+      if (quoteWithItems) {
+        setPreviewQuote(quoteWithItems);
+      }
+    } catch (error) {
+      console.error('Error loading quote details:', error);
+      // TODO: Show error message to user
+    }
+  };
+
+  const handleDelete = async (quoteId: string) => {
+    if (!confirm('Ești sigur că vrei să ștergi această ofertă?')) {
+      return;
+    }
+
+    try {
+      setDeletingId(quoteId);
+      await quotesApi.deleteQuote(quoteId);
+      setQuotes(quotes.filter((q) => q.id !== quoteId));
+    } catch (error) {
+      console.error('Error deleting quote:', error);
+      alert('Eroare la ștergerea ofertei. Te rugăm să încerci din nou.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDetails = (quoteId: string) => {
+    // Placeholder for future editing functionality
+    alert(`Detalii pentru oferta ${quoteId}\n(Funcționalitate în dezvoltare)`);
+  };
+
+  const getStatusBadge = (status: Quote['status']) => {
+    const statusConfig = {
+      draft: { label: 'Ciornă', color: 'bg-gray-100 text-gray-800' },
+      sent: { label: 'Trimisă', color: 'bg-blue-100 text-blue-800' },
+      accepted: { label: 'Acceptată', color: 'bg-green-100 text-green-800' },
+      rejected: { label: 'Respinsă', color: 'bg-red-100 text-red-800' },
+      cancelled: { label: 'Anulată', color: 'bg-yellow-100 text-yellow-800' },
+    };
+
+    const config = statusConfig[status] || statusConfig.draft;
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${config.color}`}>
+        {config.label}
+      </span>
+    );
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('ro-RO', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
   };
 
   return (
@@ -18,47 +93,80 @@ export default function QuotesPage() {
       <h1 className="text-3xl font-bold text-gray-800 mb-2">Ofertele Mele</h1>
       <p className="text-gray-600 mb-8">Toate ofertele create pentru clienți</p>
 
-      {quotes.length === 0 ? (
+      {isLoading ? (
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <Loader2 className="w-8 h-8 text-gray-400 mx-auto mb-4 animate-spin" />
+          <p className="text-gray-500">Se încarcă ofertele...</p>
+        </div>
+      ) : quotes.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
           <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-700 mb-2">Nicio ofertă încă</h2>
           <p className="text-gray-500">Creează prima ta ofertă folosind configuratorul vizual</p>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {quotes.map((quote) => (
-            <div
-              key={quote.id}
-              className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-800">{quote.clientName}</h3>
-                  <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
-                    <Calendar className="w-4 h-4" />
-                    <span>{new Date(quote.createdAt).toLocaleDateString('ro-RO')}</span>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-2">
-                    {quote.windows.length} {quote.windows.length === 1 ? 'fereastră' : 'ferestre'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <p className="text-sm text-gray-500">Total</p>
-                    <p className="text-2xl font-bold text-gray-800">{quote.totalPrice.toFixed(2)} RON</p>
-                  </div>
-                  <button
-                    onClick={() => handleViewPDF(quote)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                    title="Vezi PDF"
-                  >
-                    <Eye className="w-4 h-4" />
-                    <span className="hidden sm:inline">Vezi</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Data</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Nume client</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Referință</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
+                  <th className="text-right py-3 px-4 font-semibold text-gray-700">Total (cu TVA)</th>
+                  <th className="text-center py-3 px-4 font-semibold text-gray-700">Acțiuni</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quotes.map((quote) => (
+                  <tr key={quote.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4">{formatDate(quote.created_at)}</td>
+                    <td className="py-3 px-4 font-medium">
+                      {quote.client_name || 'Fără client'}
+                    </td>
+                    <td className="py-3 px-4 text-gray-600">
+                      {quote.reference || '-'}
+                    </td>
+                    <td className="py-3 px-4">{getStatusBadge(quote.status)}</td>
+                    <td className="py-3 px-4 text-right font-semibold">
+                      {quote.total.toFixed(2)} RON
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => handleViewPDF(quote.id)}
+                          className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Exportă PDF"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDetails(quote.id)}
+                          className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                          title="Detalii"
+                        >
+                          <Info className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(quote.id)}
+                          disabled={deletingId === quote.id}
+                          className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Șterge"
+                        >
+                          {deletingId === quote.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
