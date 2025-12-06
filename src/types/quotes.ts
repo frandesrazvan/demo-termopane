@@ -40,11 +40,17 @@ export interface QuoteItem {
   price_without_vat: number;
   vat_rate: number;
   total_with_vat: number;
+  profile_series_id?: string;
+  profile_length_m?: number;
+  glass_area_sqm?: number;
   created_at: string;
 }
 
 export interface QuoteWithItems extends Quote {
   items: QuoteItem[];
+  // Aggregated material totals (computed on frontend)
+  totalProfileLengthBySeries?: Record<string, number>;
+  totalGlassAreaSqm?: number;
 }
 
 // Input type used when creating a new quote from the UI
@@ -59,5 +65,8 @@ export interface QuoteItemInput {
   price_without_vat: number;
   vat_rate: number;
   total_with_vat: number;
+  profile_series_id?: string;
+  profile_length_m?: number;
+  glass_area_sqm?: number;
 }
 

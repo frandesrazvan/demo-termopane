@@ -151,7 +151,7 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
     
     // Top right: Program name and page number
     const pageCount = doc.getNumberOfPages();
-    doc.text('Realizat cu programul "Fenestra 2000"', pageWidth - margin, yPos, { align: 'right' });
+    doc.text('Realizat cu programul "Termopane Manager"', pageWidth - margin, yPos, { align: 'right' });
     yPos += 4;
     doc.text(`Pagina nr. ${pageCount} / ${pageCount}`, pageWidth - margin, yPos, { align: 'right' });
     
@@ -364,6 +364,47 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
       }
     });
 
+    // Add material summary at the end (on last item's page or new page)
+    if (quote.items.length > 0) {
+      // Check if we need a new page for the summary
+      const currentPage = doc.getNumberOfPages();
+      let summaryY = yPos;
+      
+      // If we're too close to the bottom, add a new page
+      if (summaryY > pageHeight - 60) {
+        doc.addPage();
+        summaryY = margin + 20;
+      }
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text('REZUMAT MATERIALE:', margin, summaryY);
+      summaryY += 8;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+
+      // Total glass area
+      if (quote.totalGlassAreaSqm && quote.totalGlassAreaSqm > 0) {
+        doc.text(`- Total sticlă: ${quote.totalGlassAreaSqm.toFixed(2)} m²`, margin + 5, summaryY);
+        summaryY += 6;
+      }
+
+      // Profile lengths by series
+      if (quote.totalProfileLengthBySeries) {
+        Object.entries(quote.totalProfileLengthBySeries).forEach(([seriesId, length]) => {
+          if (length > 0) {
+            // Try to find profile name from settings, fallback to ID
+            const profile = settings?.profileSeries?.find((p: any) => p.id === seriesId);
+            const profileName = profile?.name || `Profil ${seriesId.substring(0, 8)}`;
+            doc.text(`- Profil ${profileName}: ${length.toFixed(2)} ml`, margin + 5, summaryY);
+            summaryY += 6;
+          }
+        });
+      }
+    }
+
     // Add terms page if needed
     const totalPages = doc.getNumberOfPages();
     if (totalPages === 1) {
@@ -461,6 +502,32 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
             </button>
           </div>
         </div>
+        {/* Material Summary */}
+        {(quote.totalGlassAreaSqm || quote.totalProfileLengthBySeries) && (
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2">Rezumat Materiale</h3>
+            <div className="flex flex-wrap gap-4 text-sm text-gray-700">
+              {quote.totalGlassAreaSqm && quote.totalGlassAreaSqm > 0 && (
+                <div>
+                  <span className="font-medium">Total sticlă:</span>{' '}
+                  <span className="text-blue-600">{quote.totalGlassAreaSqm.toFixed(2)} m²</span>
+                </div>
+              )}
+              {quote.totalProfileLengthBySeries &&
+                Object.entries(quote.totalProfileLengthBySeries).map(([seriesId, length]) => {
+                  if (length <= 0) return null;
+                  const profile = settings?.profileSeries?.find((p: any) => p.id === seriesId);
+                  const profileName = profile?.name || `Profil ${seriesId.substring(0, 8)}`;
+                  return (
+                    <div key={seriesId}>
+                      <span className="font-medium">Profil {profileName}:</span>{' '}
+                      <span className="text-blue-600">{length.toFixed(2)} ml</span>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
         <div className="flex-1 overflow-hidden">
           <iframe
             ref={iframeRef}

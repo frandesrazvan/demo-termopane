@@ -8,6 +8,8 @@ const toSupabaseFormat = (profile: Omit<ProfileSeries, 'id' | 'user_id'>) => ({
   price_per_meter: profile.pricePerMeter,
   color_category: profile.colorCategory,
   chambers: profile.chambers,
+  glass_width_deduction_mm: profile.glass_width_deduction_mm,
+  glass_height_deduction_mm: profile.glass_height_deduction_mm,
 });
 
 const fromSupabaseFormat = (data: any): ProfileSeries => ({
@@ -16,6 +18,8 @@ const fromSupabaseFormat = (data: any): ProfileSeries => ({
   pricePerMeter: parseFloat(data.price_per_meter),
   colorCategory: data.color_category,
   chambers: data.chambers || 5, // Default to 5 if not present
+  glass_width_deduction_mm: data.glass_width_deduction_mm ?? 24, // Default to 24 if not present
+  glass_height_deduction_mm: data.glass_height_deduction_mm ?? 24, // Default to 24 if not present
   user_id: data.user_id ?? undefined,
 });
 
@@ -25,24 +29,32 @@ const defaultTemplates: Omit<ProfileSeries, 'id' | 'user_id'>[] = [
     pricePerMeter: 45,
     colorCategory: 'Alb',
     chambers: 5,
+    glass_width_deduction_mm: 24,
+    glass_height_deduction_mm: 24,
   },
   {
     name: 'Rehau Synego',
     pricePerMeter: 58,
     colorCategory: 'Alb',
     chambers: 7,
+    glass_width_deduction_mm: 24,
+    glass_height_deduction_mm: 24,
   },
   {
     name: 'Salamander Bluevolution 82',
     pricePerMeter: 62,
     colorCategory: 'Alb',
     chambers: 7,
+    glass_width_deduction_mm: 24,
+    glass_height_deduction_mm: 24,
   },
   {
     name: 'Veka Softline 70',
     pricePerMeter: 50,
     colorCategory: 'Alb',
     chambers: 5,
+    glass_width_deduction_mm: 24,
+    glass_height_deduction_mm: 24,
   },
 ];
 
@@ -88,6 +100,8 @@ export const profileSeriesService = {
     if (updates.pricePerMeter !== undefined) supabaseUpdates.price_per_meter = updates.pricePerMeter;
     if (updates.colorCategory !== undefined) supabaseUpdates.color_category = updates.colorCategory;
     if (updates.chambers !== undefined) supabaseUpdates.chambers = updates.chambers;
+    if (updates.glass_width_deduction_mm !== undefined) supabaseUpdates.glass_width_deduction_mm = updates.glass_width_deduction_mm;
+    if (updates.glass_height_deduction_mm !== undefined) supabaseUpdates.glass_height_deduction_mm = updates.glass_height_deduction_mm;
 
     const { data, error } = await supabase
       .from('profile_series')

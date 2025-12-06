@@ -6,6 +6,8 @@ export interface ProfileSeries {
   pricePerMeter: number;
   colorCategory: string;
   chambers: number;
+  glass_width_deduction_mm: number;
+  glass_height_deduction_mm: number;
   user_id?: string;
 }
 

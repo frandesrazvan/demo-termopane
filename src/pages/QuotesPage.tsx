@@ -89,9 +89,9 @@ export default function QuotesPage() {
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold text-gray-800 mb-2">Ofertele Mele</h1>
-      <p className="text-gray-600 mb-8">Toate ofertele create pentru clienți</p>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+      <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Ofertele Mele</h1>
+      <p className="text-sm sm:text-base text-gray-600 mb-6 sm:mb-8">Toate ofertele create pentru clienți</p>
 
       {isLoading ? (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
@@ -106,7 +106,65 @@ export default function QuotesPage() {
         </div>
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Mobile card view */}
+          <div className="block md:hidden divide-y divide-gray-200">
+            {quotes.map((quote) => (
+              <div key={quote.id} className="p-4 hover:bg-gray-50 transition-colors">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900 mb-1">
+                      {quote.client_name || 'Fără client'}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {formatDate(quote.created_at)}
+                    </div>
+                    {quote.reference && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Ref: {quote.reference}
+                      </div>
+                    )}
+                  </div>
+                  <div className="ml-4">{getStatusBadge(quote.status)}</div>
+                </div>
+                <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                  <div className="text-lg font-semibold text-gray-900">
+                    {quote.total.toFixed(2)} RON
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleViewPDF(quote.id)}
+                      className="p-2.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Vezi PDF"
+                    >
+                      <Eye className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => handleDetails(quote.id)}
+                      className="p-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                      title="Detalii"
+                    >
+                      <Info className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(quote.id)}
+                      disabled={deletingId === quote.id}
+                      className="p-2.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      title="Șterge"
+                    >
+                      {deletingId === quote.id ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-5 h-5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table view */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>

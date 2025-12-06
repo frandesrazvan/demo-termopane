@@ -48,6 +48,9 @@ const quoteItemToSupabase = (item: QuoteItemInput, quoteId: string) => ({
   price_without_vat: item.price_without_vat,
   vat_rate: item.vat_rate,
   total_with_vat: item.total_with_vat,
+  profile_series_id: item.profile_series_id ?? null,
+  profile_length_m: item.profile_length_m ?? null,
+  glass_area_sqm: item.glass_area_sqm ?? null,
 });
 
 const quoteItemFromSupabase = (data: any): QuoteItem => ({
@@ -64,6 +67,9 @@ const quoteItemFromSupabase = (data: any): QuoteItem => ({
   price_without_vat: parseFloat(data.price_without_vat || 0),
   vat_rate: parseFloat(data.vat_rate || 0),
   total_with_vat: parseFloat(data.total_with_vat || 0),
+  profile_series_id: data.profile_series_id ?? undefined,
+  profile_length_m: data.profile_length_m ? parseFloat(data.profile_length_m) : undefined,
+  glass_area_sqm: data.glass_area_sqm ? parseFloat(data.glass_area_sqm) : undefined,
   created_at: data.created_at,
 });
 
@@ -186,9 +192,33 @@ export const quotesApi = {
       throw itemsError;
     }
 
+    const quoteItems = (items || []).map(quoteItemFromSupabase);
+
+    // Calculate aggregate totals
+    const totalProfileLengthBySeries: Record<string, number> = {};
+    let totalGlassAreaSqm = 0;
+
+    quoteItems.forEach((item) => {
+      // Sum glass area
+      if (item.glass_area_sqm) {
+        totalGlassAreaSqm += item.glass_area_sqm * item.quantity;
+      }
+
+      // Sum profile length by series
+      if (item.profile_series_id && item.profile_length_m) {
+        const seriesId = item.profile_series_id;
+        if (!totalProfileLengthBySeries[seriesId]) {
+          totalProfileLengthBySeries[seriesId] = 0;
+        }
+        totalProfileLengthBySeries[seriesId] += item.profile_length_m * item.quantity;
+      }
+    });
+
     return {
       ...quoteFromSupabase(quote),
-      items: (items || []).map(quoteItemFromSupabase),
+      items: quoteItems,
+      totalProfileLengthBySeries,
+      totalGlassAreaSqm,
     };
   },
 

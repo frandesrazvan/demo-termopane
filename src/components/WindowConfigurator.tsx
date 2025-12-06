@@ -17,6 +17,12 @@ interface SashConfig {
   fillType: 'glass' | 'panel';
 }
 
+export interface GlassPiece {
+  width_mm: number;
+  height_mm: number;
+  quantity: number;
+}
+
 export interface WindowConfigData {
   width: number;
   height: number;
@@ -37,6 +43,11 @@ export interface WindowConfigData {
   sellingPrice: number;
   vatAmount: number;
   finalPriceWithVAT: number;
+  // Glass piece details
+  glassPieces: GlassPiece[];
+  glassAreaSqm: number;
+  // Profile length details
+  profileLengthMeters: number;
 }
 
 interface WindowConfiguratorProps {
@@ -107,13 +118,16 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
     return profileCost + glassCost + hardwareCost;
   }, [width, height, selectedProfileId, selectedGlassId, selectedHardwareId, sashes, settings]);
 
-  // Calculate individual material costs for breakdown
-  const profileCost = useMemo(() => {
-    if (!selectedProfileId) return 0;
+  // Calculate profile length and cost
+  const { profileLengthMeters, profileCost } = useMemo(() => {
+    if (!selectedProfileId) return { profileLengthMeters: 0, profileCost: 0 };
     const profile = settings.profileSeries.find((p) => p.id === selectedProfileId);
-    if (!profile) return 0;
+    if (!profile) return { profileLengthMeters: 0, profileCost: 0 };
+    // Calculate perimeter (2 * width + 2 * height) in meters
+    // This is the total linear meters of profile needed for the frame
     const perimeterMeters = ((width * 2 + height * 2) / 1000);
-    return perimeterMeters * profile.pricePerMeter;
+    const cost = perimeterMeters * profile.pricePerMeter;
+    return { profileLengthMeters: perimeterMeters, profileCost: cost };
   }, [width, height, selectedProfileId, settings.profileSeries]);
 
   const glassCost = useMemo(() => {
@@ -138,6 +152,59 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
     });
     return cost;
   }, [selectedHardwareId, sashes, settings.hardwareOptions]);
+
+  // Calculate glass pieces per compartment (cotele la sticlă)
+  const { glassPieces, glassAreaSqm } = useMemo(() => {
+    if (!selectedProfileId || sashCount === 0) {
+      return { glassPieces: [], glassAreaSqm: 0 };
+    }
+
+    const profile = settings.profileSeries.find((p) => p.id === selectedProfileId);
+    if (!profile) {
+      return { glassPieces: [], glassAreaSqm: 0 };
+    }
+
+    const compartmentWidthMm = width / sashCount;
+    const compartmentHeightMm = height;
+
+    // Calculate glass dimensions for each sash that uses glass
+    const glassSizes: Array<{ width_mm: number; height_mm: number }> = [];
+    
+    sashes.forEach((sash) => {
+      if (sash.fillType === 'glass') {
+        // Apply glass deductions from profile series
+        const gw = Math.max(0, compartmentWidthMm - profile.glass_width_deduction_mm);
+        const gh = Math.max(0, compartmentHeightMm - profile.glass_height_deduction_mm);
+        glassSizes.push({ width_mm: gw, height_mm: gh });
+      }
+    });
+
+    // Group identical sizes
+    const grouped: Map<string, GlassPiece> = new Map();
+    glassSizes.forEach((size) => {
+      const key = `${size.width_mm.toFixed(1)}x${size.height_mm.toFixed(1)}`;
+      if (grouped.has(key)) {
+        const existing = grouped.get(key)!;
+        existing.quantity += 1;
+      } else {
+        grouped.set(key, {
+          width_mm: size.width_mm,
+          height_mm: size.height_mm,
+          quantity: 1,
+        });
+      }
+    });
+
+    const pieces = Array.from(grouped.values());
+
+    // Calculate total glass area in square meters
+    const totalArea = pieces.reduce(
+      (sum, piece) => sum + (piece.width_mm / 1000) * (piece.height_mm / 1000) * piece.quantity,
+      0
+    );
+
+    return { glassPieces: pieces, glassAreaSqm: totalArea };
+  }, [width, height, sashCount, sashes, selectedProfileId, settings.profileSeries]);
 
   // Derived pricing values for commercial dashboard
   const baseMaterialsCost = calculatedPrice;
@@ -202,6 +269,9 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
         sellingPrice,
         vatAmount,
         finalPriceWithVAT,
+        glassPieces,
+        glassAreaSqm,
+        profileLengthMeters,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -217,6 +287,9 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
     calculatedPrice,
     productType,
     baseCost,
+    glassPieces,
+    glassAreaSqm,
+    profileLengthMeters,
     markupPercent,
     markupFixed,
     discountPercent,
@@ -661,7 +734,7 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Lățime (mm)
@@ -673,7 +746,7 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
               onBlur={handleWidthBlur}
               min={MIN_DIMENSION}
               max={MAX_DIMENSION}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
             />
             <p className="text-xs text-gray-500 mt-1">Min: {MIN_DIMENSION}mm, Max: {MAX_DIMENSION}mm</p>
           </div>
@@ -689,13 +762,13 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
               onBlur={handleHeightBlur}
               min={MIN_DIMENSION}
               max={MAX_DIMENSION}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
             />
             <p className="text-xs text-gray-500 mt-1">Min: {MIN_DIMENSION}mm, Max: {MAX_DIMENSION}mm</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Seria de Profil
@@ -703,7 +776,7 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
             <select
               value={selectedProfileId}
               onChange={(e) => setSelectedProfileId(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
             >
               <option value="">Selectează profil...</option>
               {settings.profileSeries.map((profile) => (
@@ -721,7 +794,7 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
             <select
               value={selectedGlassId}
               onChange={(e) => setSelectedGlassId(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
             >
               <option value="">Selectează geam...</option>
               {settings.glassTypes.map((glass) => (
@@ -733,7 +806,7 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Feronerie
@@ -741,7 +814,7 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
             <select
               value={selectedHardwareId}
               onChange={(e) => setSelectedHardwareId(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
             >
               <option value="">Selectează feronerie...</option>
               {settings.hardwareOptions.map((hardware) => (
@@ -759,7 +832,7 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
             <select
               value={selectedColor}
               onChange={(e) => setSelectedColor(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
             >
               <option value="">Selectează culoare...</option>
               {availableColors.map((color) => (
@@ -798,7 +871,7 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Tip Deschidere per Compartiment
             </label>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {sashes.map((sash, index) => (
                 <div key={sash.id} className="bg-gray-50 p-4 rounded-lg">
                   <label className="block text-xs font-medium text-gray-600 mb-2">
@@ -838,7 +911,7 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Tip Deschidere
             </label>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <select
               value={sashes[0].openingType}
                 onChange={(e) =>
@@ -866,9 +939,9 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
       </div>
 
       {/* Preview and Price Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Previzualizare</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Previzualizare</h2>
           <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
             <p className="text-xs text-gray-600 mb-3 font-medium">PREVIZUALIZARE</p>
             <div className="flex justify-center overflow-auto">
@@ -885,8 +958,8 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Calcul Preț</h2>
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Calcul Preț</h2>
           <div className="space-y-6">
             {selectedProfileId && selectedGlassId && selectedHardwareId ? (
               <>
@@ -898,6 +971,15 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
                       <span>Profil:</span>
                       <span>{profileCost.toFixed(2)} RON</span>
                     </div>
+                    {selectedProfileId && profileLengthMeters > 0 && (
+                      <div className="flex justify-between text-xs text-gray-500 italic">
+                        <span>Profil necesar:</span>
+                        <span>
+                          {profileLengthMeters.toFixed(3)} ml [
+                          {settings.profileSeries.find((p) => p.id === selectedProfileId)?.name || 'N/A'}]
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span>Geam:</span>
                       <span>{glassCost.toFixed(2)} RON</span>
@@ -924,7 +1006,7 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
                 {/* Section 2: Price Change Section */}
                 <div className="border border-gray-200 rounded-lg p-4">
                   <h3 className="text-sm font-semibold text-gray-800 mb-3">Modificări Preț</h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">
                         Adaos Comercial (%)
