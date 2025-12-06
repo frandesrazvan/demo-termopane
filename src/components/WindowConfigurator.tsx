@@ -21,6 +21,7 @@ export interface GlassPiece {
   width_mm: number;
   height_mm: number;
   quantity: number;
+  area_sqm: number;
 }
 
 export interface WindowConfigData {
@@ -186,11 +187,15 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
       if (grouped.has(key)) {
         const existing = grouped.get(key)!;
         existing.quantity += 1;
+        // Recalculate area for the updated quantity
+        existing.area_sqm = (existing.width_mm / 1000) * (existing.height_mm / 1000) * existing.quantity;
       } else {
+        const area_sqm = (size.width_mm / 1000) * (size.height_mm / 1000);
         grouped.set(key, {
           width_mm: size.width_mm,
           height_mm: size.height_mm,
           quantity: 1,
+          area_sqm,
         });
       }
     });
@@ -198,10 +203,7 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
     const pieces = Array.from(grouped.values());
 
     // Calculate total glass area in square meters
-    const totalArea = pieces.reduce(
-      (sum, piece) => sum + (piece.width_mm / 1000) * (piece.height_mm / 1000) * piece.quantity,
-      0
-    );
+    const totalArea = pieces.reduce((sum, piece) => sum + piece.area_sqm, 0);
 
     return { glassPieces: pieces, glassAreaSqm: totalArea };
   }, [width, height, sashCount, sashes, selectedProfileId, settings.profileSeries]);

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { Quote, QuoteItem, QuoteWithItems, QuoteItemInput } from '../types/quotes';
+import { profileSeriesService } from '../services/profileSeriesService';
 
 // Helper functions to convert between camelCase (TypeScript) and snake_case (Supabase)
 const quoteToSupabase = (quote: Partial<Quote>) => {
@@ -194,7 +195,20 @@ export const quotesApi = {
 
     const quoteItems = (items || []).map(quoteItemFromSupabase);
 
+    // Fetch all profile series to map IDs to names for aggregation
+    let profileSeriesMap: Map<string, string> = new Map();
+    try {
+      const allProfiles = await profileSeriesService.getAll();
+      allProfiles.forEach((profile) => {
+        profileSeriesMap.set(profile.id, profile.name);
+      });
+    } catch (error) {
+      console.error('Error fetching profile series for aggregation:', error);
+      // Continue without profile names - will use IDs as fallback
+    }
+
     // Calculate aggregate totals
+    // Key is profile series NAME (not ID) for better readability
     const totalProfileLengthBySeries: Record<string, number> = {};
     let totalGlassAreaSqm = 0;
 
@@ -204,13 +218,13 @@ export const quotesApi = {
         totalGlassAreaSqm += item.glass_area_sqm * item.quantity;
       }
 
-      // Sum profile length by series
+      // Sum profile length by series (using series NAME as key)
       if (item.profile_series_id && item.profile_length_m) {
-        const seriesId = item.profile_series_id;
-        if (!totalProfileLengthBySeries[seriesId]) {
-          totalProfileLengthBySeries[seriesId] = 0;
+        const seriesName = profileSeriesMap.get(item.profile_series_id) || item.profile_series_id;
+        if (!totalProfileLengthBySeries[seriesName]) {
+          totalProfileLengthBySeries[seriesName] = 0;
         }
-        totalProfileLengthBySeries[seriesId] += item.profile_length_m * item.quantity;
+        totalProfileLengthBySeries[seriesName] += item.profile_length_m * item.quantity;
       }
     });
 

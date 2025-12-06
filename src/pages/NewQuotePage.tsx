@@ -327,17 +327,14 @@ export default function NewQuotePage({ onSave }: NewQuotePageProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {windowConfig.glassPieces.map((piece, index) => {
-                        const area = (piece.width_mm / 1000) * (piece.height_mm / 1000) * piece.quantity;
-                        return (
-                          <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                            <td className="py-2 px-3">{piece.quantity}</td>
-                            <td className="py-2 px-3 text-right">{piece.width_mm.toFixed(1)}</td>
-                            <td className="py-2 px-3 text-right">{piece.height_mm.toFixed(1)}</td>
-                            <td className="py-2 px-3 text-right">{area.toFixed(3)}</td>
-                          </tr>
-                        );
-                      })}
+                      {windowConfig.glassPieces.map((piece, index) => (
+                        <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-2 px-3">{piece.quantity}</td>
+                          <td className="py-2 px-3 text-right">{piece.width_mm.toFixed(1)}</td>
+                          <td className="py-2 px-3 text-right">{piece.height_mm.toFixed(1)}</td>
+                          <td className="py-2 px-3 text-right">{piece.area_sqm.toFixed(3)}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

@@ -304,13 +304,6 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
 
       yPos += drawingHeight + 10;
 
-      // Use stored pricing from item
-      const baseCost = item.base_cost;
-      const sellingPrice = item.price_without_vat;
-      const vatAmount = item.total_with_vat - item.price_without_vat;
-      const finalPriceWithVAT = item.total_with_vat;
-      const itemTotal = finalPriceWithVAT * item.quantity;
-
       // Pricing section - only on last item
       if (itemIndex === quote.items.length - 1) {
         // Summary section for all items
@@ -367,7 +360,6 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
     // Add material summary at the end (on last item's page or new page)
     if (quote.items.length > 0) {
       // Check if we need a new page for the summary
-      const currentPage = doc.getNumberOfPages();
       let summaryY = yPos;
       
       // If we're too close to the bottom, add a new page
@@ -379,7 +371,7 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(0, 0, 0);
-      doc.text('REZUMAT MATERIALE:', margin, summaryY);
+      doc.text('REZUMAT MATERIALE (pentru informare internă):', margin, summaryY);
       summaryY += 8;
 
       doc.setFont('helvetica', 'normal');
@@ -391,14 +383,15 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
         summaryY += 6;
       }
 
-      // Profile lengths by series
-      if (quote.totalProfileLengthBySeries) {
-        Object.entries(quote.totalProfileLengthBySeries).forEach(([seriesId, length]) => {
+      // Profile lengths by series (key is already the profile series name)
+      if (quote.totalProfileLengthBySeries && Object.keys(quote.totalProfileLengthBySeries).length > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Profiluri utilizate:', margin + 5, summaryY);
+        summaryY += 6;
+        doc.setFont('helvetica', 'normal');
+        Object.entries(quote.totalProfileLengthBySeries).forEach(([seriesName, length]) => {
           if (length > 0) {
-            // Try to find profile name from settings, fallback to ID
-            const profile = settings?.profileSeries?.find((p: any) => p.id === seriesId);
-            const profileName = profile?.name || `Profil ${seriesId.substring(0, 8)}`;
-            doc.text(`- Profil ${profileName}: ${length.toFixed(2)} ml`, margin + 5, summaryY);
+            doc.text(`- ${seriesName}: ${length.toFixed(2)} ml`, margin + 5, summaryY);
             summaryY += 6;
           }
         });
@@ -514,13 +507,11 @@ export default function PDFPreview({ quote, settings, onClose }: PDFPreviewProps
                 </div>
               )}
               {quote.totalProfileLengthBySeries &&
-                Object.entries(quote.totalProfileLengthBySeries).map(([seriesId, length]) => {
+                Object.entries(quote.totalProfileLengthBySeries).map(([seriesName, length]) => {
                   if (length <= 0) return null;
-                  const profile = settings?.profileSeries?.find((p: any) => p.id === seriesId);
-                  const profileName = profile?.name || `Profil ${seriesId.substring(0, 8)}`;
                   return (
-                    <div key={seriesId}>
-                      <span className="font-medium">Profil {profileName}:</span>{' '}
+                    <div key={seriesName}>
+                      <span className="font-medium">Profil {seriesName}:</span>{' '}
                       <span className="text-blue-600">{length.toFixed(2)} ml</span>
                     </div>
                   );
