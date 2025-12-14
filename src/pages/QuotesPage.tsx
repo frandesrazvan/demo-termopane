@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { quotesApi } from '../lib/quotesApi';
 import { Quote, QuoteWithItems } from '../types/quotes';
-import { FileText, Eye, Trash2, Info, Loader2 } from 'lucide-react';
+import { FileText, Eye, Trash2, Info, Loader2, Package } from 'lucide-react';
 import PDFPreview from '../components/PDFPreview';
+import MaterialSummaryModal from '../components/MaterialSummaryModal';
+import { calculateMaterialSummary, QuoteMaterialSummary } from '../lib/materialSummary';
 
 export default function QuotesPage() {
   const settings = useStore((state) => state.settings);
@@ -11,6 +13,9 @@ export default function QuotesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [previewQuote, setPreviewQuote] = useState<QuoteWithItems | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [materialSummary, setMaterialSummary] = useState<QuoteMaterialSummary | null>(null);
+  const [materialSummaryQuote, setMaterialSummaryQuote] = useState<Quote | null>(null);
+  const [isLoadingMaterials, setIsLoadingMaterials] = useState(false);
 
   useEffect(() => {
     loadQuotes();
@@ -61,6 +66,33 @@ export default function QuotesPage() {
   const handleDetails = (quoteId: string) => {
     // Placeholder for future editing functionality
     alert(`Detalii pentru oferta ${quoteId}\n(Funcționalitate în dezvoltare)`);
+  };
+
+  const handleViewMaterials = async (quoteId: string) => {
+    try {
+      setIsLoadingMaterials(true);
+      const quoteWithItems = await quotesApi.fetchQuoteWithItems(quoteId);
+      if (!quoteWithItems) {
+        alert('Oferta nu a fost găsită.');
+        return;
+      }
+
+      // Calculate material summary
+      const summary = calculateMaterialSummary(
+        quoteWithItems,
+        settings.profileSeries,
+        settings.glassTypes,
+        settings.hardwareOptions
+      );
+
+      setMaterialSummary(summary);
+      setMaterialSummaryQuote(quoteWithItems);
+    } catch (error) {
+      console.error('Error loading material summary:', error);
+      alert('Eroare la încărcarea sumarului de materiale. Te rugăm să încerci din nou.');
+    } finally {
+      setIsLoadingMaterials(false);
+    }
   };
 
   const getStatusBadge = (status: Quote['status']) => {
@@ -139,6 +171,18 @@ export default function QuotesPage() {
                       <Eye className="w-5 h-5" />
                     </button>
                     <button
+                      onClick={() => handleViewMaterials(quote.id)}
+                      disabled={isLoadingMaterials}
+                      className="p-2.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
+                      title="Materiale"
+                    >
+                      {isLoadingMaterials ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Package className="w-5 h-5" />
+                      )}
+                    </button>
+                    <button
                       onClick={() => handleDetails(quote.id)}
                       className="p-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
                       title="Detalii"
@@ -200,6 +244,18 @@ export default function QuotesPage() {
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
+                          onClick={() => handleViewMaterials(quote.id)}
+                          disabled={isLoadingMaterials}
+                          className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Materiale"
+                        >
+                          {isLoadingMaterials ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Package className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
                           onClick={() => handleDetails(quote.id)}
                           className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
                           title="Detalii"
@@ -233,6 +289,17 @@ export default function QuotesPage() {
           quote={previewQuote}
           settings={settings}
           onClose={() => setPreviewQuote(null)}
+        />
+      )}
+
+      {materialSummary && materialSummaryQuote && (
+        <MaterialSummaryModal
+          summary={materialSummary}
+          quote={materialSummaryQuote}
+          onClose={() => {
+            setMaterialSummary(null);
+            setMaterialSummaryQuote(null);
+          }}
         />
       )}
     </div>

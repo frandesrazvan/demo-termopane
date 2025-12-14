@@ -21,7 +21,6 @@ export interface GlassPiece {
   width_mm: number;
   height_mm: number;
   quantity: number;
-  area_sqm: number;
 }
 
 export interface WindowConfigData {
@@ -53,9 +52,19 @@ export interface WindowConfigData {
 
 interface WindowConfiguratorProps {
   onConfigChange?: (config: WindowConfigData) => void;
+  initialProfileId?: string;
+  initialGlassId?: string;
+  initialHardwareId?: string;
+  hidePricing?: boolean;
 }
 
-export default function WindowConfigurator({ onConfigChange }: WindowConfiguratorProps) {
+export default function WindowConfigurator({ 
+  onConfigChange,
+  initialProfileId = '',
+  initialGlassId = '',
+  initialHardwareId = '',
+  hidePricing = false,
+}: WindowConfiguratorProps) {
   const { settings } = useStore();
 
   // Window dimensions
@@ -66,11 +75,18 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
   const [productType, setProductType] = useState<ProductType>('window');
 
   // Configuration selections
-  const [selectedProfileId, setSelectedProfileId] = useState<string>('');
-  const [selectedGlassId, setSelectedGlassId] = useState<string>('');
-  const [selectedHardwareId, setSelectedHardwareId] = useState<string>('');
+  const [selectedProfileId, setSelectedProfileId] = useState<string>(initialProfileId);
+  const [selectedGlassId, setSelectedGlassId] = useState<string>(initialGlassId);
+  const [selectedHardwareId, setSelectedHardwareId] = useState<string>(initialHardwareId);
   const [selectedColor, setSelectedColor] = useState<string>('');
   const [sashCount, setSashCount] = useState<1 | 2 | 3>(1);
+
+  // Update selections when initial values change
+  useEffect(() => {
+    if (initialProfileId) setSelectedProfileId(initialProfileId);
+    if (initialGlassId) setSelectedGlassId(initialGlassId);
+    if (initialHardwareId) setSelectedHardwareId(initialHardwareId);
+  }, [initialProfileId, initialGlassId, initialHardwareId]);
 
   // Sash configurations
   const [sashes, setSashes] = useState<SashConfig[]>([
@@ -156,7 +172,7 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
 
   // Calculate glass pieces per compartment (cotele la sticlă)
   const { glassPieces, glassAreaSqm } = useMemo(() => {
-    if (!selectedProfileId || sashCount === 0) {
+    if (!selectedProfileId) {
       return { glassPieces: [], glassAreaSqm: 0 };
     }
 
@@ -187,15 +203,11 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
       if (grouped.has(key)) {
         const existing = grouped.get(key)!;
         existing.quantity += 1;
-        // Recalculate area for the updated quantity
-        existing.area_sqm = (existing.width_mm / 1000) * (existing.height_mm / 1000) * existing.quantity;
       } else {
-        const area_sqm = (size.width_mm / 1000) * (size.height_mm / 1000);
         grouped.set(key, {
           width_mm: size.width_mm,
           height_mm: size.height_mm,
           quantity: 1,
-          area_sqm,
         });
       }
     });
@@ -203,7 +215,10 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
     const pieces = Array.from(grouped.values());
 
     // Calculate total glass area in square meters
-    const totalArea = pieces.reduce((sum, piece) => sum + piece.area_sqm, 0);
+    const totalArea = pieces.reduce(
+      (sum, piece) => sum + (piece.width_mm / 1000) * (piece.height_mm / 1000) * piece.quantity,
+      0
+    );
 
     return { glassPieces: pieces, glassAreaSqm: totalArea };
   }, [width, height, sashCount, sashes, selectedProfileId, settings.profileSeries]);
@@ -960,153 +975,164 @@ export default function WindowConfigurator({ onConfigChange }: WindowConfigurato
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Calcul Preț</h2>
-          <div className="space-y-6">
-            {selectedProfileId && selectedGlassId && selectedHardwareId ? (
-              <>
-                {/* Section 1: Build Cost */}
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <h3 className="text-sm font-semibold text-gray-800 mb-3">Cost Producție</h3>
-                  <div className="space-y-2 text-sm text-gray-600 mb-3">
-                    <div className="flex justify-between">
-                      <span>Profil:</span>
-                      <span>{profileCost.toFixed(2)} RON</span>
-                    </div>
-                    {selectedProfileId && profileLengthMeters > 0 && (
-                      <div className="flex justify-between text-xs text-gray-500 italic">
-                        <span>Profil necesar:</span>
-                        <span>
-                          {profileLengthMeters.toFixed(3)} ml [
-                          {settings.profileSeries.find((p) => p.id === selectedProfileId)?.name || 'N/A'}]
-                        </span>
+        {!hidePricing && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Calcul Preț</h2>
+            <div className="space-y-6">
+              {selectedProfileId && selectedGlassId && selectedHardwareId ? (
+                <>
+                  {/* Section 1: Build Cost */}
+                  <div className="border border-gray-200 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-gray-800 mb-3">Cost Producție</h3>
+                    <div className="space-y-2 text-sm text-gray-600 mb-3">
+                      <div className="flex justify-between">
+                        <span>Profil:</span>
+                        <span>{profileCost.toFixed(2)} RON</span>
                       </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span>Geam:</span>
-                      <span>{glassCost.toFixed(2)} RON</span>
+                      {selectedProfileId && profileLengthMeters > 0 && (
+                        <div className="flex justify-between text-xs text-gray-500 italic">
+                          <span>Profil necesar:</span>
+                          <span>
+                            {profileLengthMeters.toFixed(3)} ml [
+                            {settings.profileSeries.find((p) => p.id === selectedProfileId)?.name || 'N/A'}]
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span>Geam:</span>
+                        <span>{glassCost.toFixed(2)} RON</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Feronerie:</span>
+                        <span>{hardwareCost.toFixed(2)} RON</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Manoperă ({settings.defaultLaborPercentage}%):</span>
+                        <span>{laborCost.toFixed(2)} RON</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Feronerie:</span>
-                      <span>{hardwareCost.toFixed(2)} RON</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Manoperă ({settings.defaultLaborPercentage}%):</span>
-                      <span>{laborCost.toFixed(2)} RON</span>
+                    <div className="border-t border-gray-200 pt-2 mt-2">
+                    <div className="flex justify-between items-center">
+                        <span className="text-base font-semibold text-gray-700">Total Cost Materiale:</span>
+                        <span className="text-xl font-bold text-blue-700">
+                          {baseCost.toFixed(2)} RON
+                      </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="border-t border-gray-200 pt-2 mt-2">
-                  <div className="flex justify-between items-center">
-                      <span className="text-base font-semibold text-gray-700">Total Cost Materiale:</span>
-                      <span className="text-xl font-bold text-blue-700">
-                        {baseCost.toFixed(2)} RON
-                    </span>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Section 2: Price Change Section */}
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <h3 className="text-sm font-semibold text-gray-800 mb-3">Modificări Preț</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Adaos Comercial (%)
-                      </label>
-                      <input
-                        type="number"
-                        value={markupPercent}
-                        onChange={(e) => setMarkupPercent(parseFloat(e.target.value) || 0)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Adaos Comercial Fix (RON)
-                      </label>
-                      <input
-                        type="number"
-                        value={markupFixed}
-                        onChange={(e) => setMarkupFixed(parseFloat(e.target.value) || 0)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Discount (%)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={discountPercent}
-                        onChange={(e) => {
-                          const value = parseFloat(e.target.value) || 0;
-                          setDiscountPercent(Math.min(Math.max(value, 0), 100));
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Discount Fix (RON)
-                      </label>
-                      <input
-                        type="number"
-                        value={discountFixed}
-                        onChange={(e) => setDiscountFixed(parseFloat(e.target.value) || 0)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                      />
+                  {/* Section 2: Price Change Section */}
+                  <div className="border border-gray-200 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-gray-800 mb-3">Modificări Preț</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Adaos Comercial (%)
+                        </label>
+                        <input
+                          type="number"
+                          value={markupPercent}
+                          onChange={(e) => setMarkupPercent(parseFloat(e.target.value) || 0)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Adaos Comercial Fix (RON)
+                        </label>
+                        <input
+                          type="number"
+                          value={markupFixed}
+                          onChange={(e) => setMarkupFixed(parseFloat(e.target.value) || 0)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Discount (%)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={discountPercent}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 0;
+                            setDiscountPercent(Math.min(Math.max(value, 0), 100));
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Discount Fix (RON)
+                        </label>
+                        <input
+                          type="number"
+                          value={discountFixed}
+                          onChange={(e) => setDiscountFixed(parseFloat(e.target.value) || 0)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Section 3: Total Price Section */}
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <h3 className="text-sm font-semibold text-gray-800 mb-3">Detalii Preț</h3>
-                  <div className="space-y-2 text-sm text-gray-700">
-                  <div className="flex justify-between">
-                      <span>Preț Materiale:</span>
-                      <span>{baseCost.toFixed(2)} RON</span>
-                  </div>
-                  <div className="flex justify-between">
-                      <span>Adaos:</span>
-                      <span>{markupAmount.toFixed(2)} RON</span>
-                  </div>
-                  <div className="flex justify-between">
-                      <span>Discount:</span>
-                      <span>-{totalDiscount.toFixed(2)} RON</span>
-                    </div>
-                    <div className="flex justify-between border-t border-gray-200 pt-2 mt-2">
-                      <span className="font-medium">Preț Fără TVA:</span>
-                      <span className="font-semibold">{sellingPrice.toFixed(2)} RON</span>
+                  {/* Section 3: Total Price Section */}
+                  <div className="border border-gray-200 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-gray-800 mb-3">Detalii Preț</h3>
+                    <div className="space-y-2 text-sm text-gray-700">
+                    <div className="flex justify-between">
+                        <span>Preț Materiale:</span>
+                        <span>{baseCost.toFixed(2)} RON</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>TVA (19%):</span>
-                      <span>{vatAmount.toFixed(2)} RON</span>
+                        <span>Adaos:</span>
+                        <span>{markupAmount.toFixed(2)} RON</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Discount:</span>
+                        <span>-{totalDiscount.toFixed(2)} RON</span>
+                      </div>
+                      <div className="flex justify-between border-t border-gray-200 pt-2 mt-2">
+                        <span className="font-medium">Preț Fără TVA:</span>
+                        <span className="font-semibold">{sellingPrice.toFixed(2)} RON</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>TVA (19%):</span>
+                        <span>{vatAmount.toFixed(2)} RON</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Section 4: Total Cost (Highlighted) */}
-                <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold text-gray-900">TOTAL DE PLATĂ:</span>
-                    <span className="text-3xl font-extrabold text-blue-700">
-                      {finalPriceWithVAT.toFixed(2)} RON
-                    </span>
+                  {/* Section 4: Total Cost (Highlighted) */}
+                  <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-lg font-bold text-gray-900">TOTAL DE PLATĂ:</span>
+                      <span className="text-3xl font-extrabold text-blue-700">
+                        {finalPriceWithVAT.toFixed(2)} RON
+                      </span>
+                    </div>
                   </div>
+                </>
+              ) : (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                  <p className="text-yellow-700">
+                    Selectează profil, geam și feronerie pentru a calcula prețul
+                  </p>
                 </div>
-              </>
-            ) : (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-                <p className="text-yellow-700">
-                  Selectează profil, geam și feronerie pentru a calcula prețul
-                </p>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
+        
+        {/* Simple estimate when pricing is hidden */}
+        {hidePricing && selectedProfileId && selectedGlassId && selectedHardwareId && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+            <p className="text-sm text-gray-600">Estimat:</p>
+            <p className="text-2xl font-bold text-blue-700">{baseCost.toFixed(2)} RON</p>
+            <p className="text-xs text-gray-500 mt-1">Prețul final va fi calculat în Preț & Export</p>
+          </div>
+        )}
       </div>
     </div>
   );
