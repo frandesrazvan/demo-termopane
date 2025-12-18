@@ -13,15 +13,27 @@ type Page = 'settings' | 'quotes' | 'new-quote';
 
 function AppShell() {
   const [currentPage, setCurrentPage] = useState<Page>('settings');
+  const [editQuoteId, setEditQuoteId] = useState<string | null>(null);
 
   const renderPage = () => {
     switch (currentPage) {
       case 'settings':
         return <SettingsPage />;
       case 'quotes':
-        return <QuotesPage />;
+        return <QuotesPage onEditQuote={(id) => { setEditQuoteId(id); setCurrentPage('new-quote'); }} />;
       case 'new-quote':
-        return <NewQuotePage onSave={() => setCurrentPage('quotes')} />;
+        return (
+          <NewQuotePage 
+            onSave={() => { 
+              setCurrentPage('quotes'); 
+              setEditQuoteId(null);
+            }} 
+            editQuoteId={editQuoteId}
+            onEditCancel={() => {
+              setEditQuoteId(null);
+            }}
+          />
+        );
       default:
         return <SettingsPage />;
     }

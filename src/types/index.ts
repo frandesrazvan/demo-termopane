@@ -108,3 +108,20 @@ export interface Settings {
   defaultLaborPercentage: number;
   defaultMarginPercentage: number;
 }
+
+// NewQuotePage types
+export type OfferTab = 'client' | 'configurator' | 'price';
+
+export interface ClientInfoState {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  reference: string;
+}
+
+export interface NewQuotePageProps {
+  onSave?: () => void;
+  editQuoteId?: string | null;
+  onEditCancel?: () => void;
+}

@@ -128,8 +128,33 @@ export const profileSeriesService = {
     return fromSupabaseFormat(data);
   },
 
+  // Check if a profile series is being used in any quote items
+  async isInUse(id: string): Promise<boolean> {
+    const { data, error } = await supabase
+      .from('quote_items')
+      .select('id')
+      .eq('profile_series_id', id)
+      .limit(1);
+
+    if (error) {
+      console.error('Error checking if profile series is in use:', error);
+      // If there's an error checking, assume it's in use to be safe
+      return true;
+    }
+
+    return (data?.length ?? 0) > 0;
+  },
+
   // Delete a profile series
   async delete(id: string): Promise<void> {
+    // Check if the profile is being used in any quotes
+    const inUse = await this.isInUse(id);
+    if (inUse) {
+      const error = new Error('Nu poți șterge această serie de profil deoarece este folosită în una sau mai multe oferte. Te rugăm să ștergi sau să modifici ofertele care o folosesc înainte.');
+      (error as any).code = 'PROFILE_IN_USE';
+      throw error;
+    }
+
     const { error } = await supabase
       .from('profile_series')
       .delete()
@@ -137,6 +162,12 @@ export const profileSeriesService = {
 
     if (error) {
       console.error('Error deleting profile series:', error);
+      // Check if it's a foreign key constraint error
+      if (error.code === '23503') {
+        const friendlyError = new Error('Nu poți șterge această serie de profil deoarece este folosită în una sau mai multe oferte. Te rugăm să ștergi sau să modifici ofertele care o folosesc înainte.');
+        (friendlyError as any).code = 'PROFILE_IN_USE';
+        throw friendlyError;
+      }
       throw error;
     }
   },

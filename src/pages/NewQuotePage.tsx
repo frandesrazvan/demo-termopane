@@ -5,22 +5,13 @@ import { QuoteItemInput } from '../types/quotes';
 import { useStore } from '../store/useStore';
 import { Plus, Trash2, FileDown } from 'lucide-react';
 import { companySettingsService } from '../services/companySettingsService';
+import { PREDEFINED_TEMPLATES } from '../config/templates';
+import { TemplateDefinition } from '../types/templates';
+import { OfferTab, ClientInfoState, NewQuotePageProps } from '../types';
+import { calculatePricingTotals } from '../utils/priceCalculator';
+import { useQuoteBasket } from '../hooks/useQuoteBasket';
 
-type OfferTab = 'client' | 'configurator' | 'price';
-
-interface ClientInfoState {
-  name: string;
-  phone: string;
-  email: string;
-  address: string;
-  reference: string;
-}
-
-interface NewQuotePageProps {
-  onSave?: () => void;
-}
-
-export default function NewQuotePage({ onSave }: NewQuotePageProps) {
+export default function NewQuotePage({ onSave, editQuoteId, onEditCancel }: NewQuotePageProps) {
   const { settings } = useStore();
   
   // Tab state
@@ -35,16 +26,18 @@ export default function NewQuotePage({ onSave }: NewQuotePageProps) {
     reference: '',
   });
 
-  // Items basket state
-  const [items, setItems] = useState<QuoteItemInput[]>([]);
-  const [currentItemLabel, setCurrentItemLabel] = useState('');
-  const [currentItemQuantity, setCurrentItemQuantity] = useState(1);
+  // Items basket state (using custom hook)
+  const basket = useQuoteBasket();
+  const { items, currentItemLabel, currentItemQuantity, setCurrentItemLabel, setCurrentItemQuantity, addItem, removeItem, setItems, resetCurrentItem } = basket;
 
   // Current item configuration
   const [windowConfig, setWindowConfig] = useState<WindowConfigData | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showGlassDetails, setShowGlassDetails] = useState(false);
+  
+  // Template selection
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateDefinition | null>(null);
 
   // Company settings for defaults
   const [companySettings, setCompanySettings] = useState<{
@@ -81,71 +74,77 @@ export default function NewQuotePage({ onSave }: NewQuotePageProps) {
     loadDefaults();
   }, []);
 
+  // Load quote data for edit mode
+  useEffect(() => {
+    const loadQuoteForEdit = async () => {
+      if (!editQuoteId) return;
+
+      try {
+        const quoteWithItems = await quotesApi.fetchQuoteWithItems(editQuoteId);
+        if (quoteWithItems) {
+          // Populate client info
+          setClientInfo({
+            name: quoteWithItems.client_name || '',
+            phone: quoteWithItems.client_phone || '',
+            email: quoteWithItems.client_email || '',
+            address: quoteWithItems.client_address || '',
+            reference: quoteWithItems.reference || '',
+          });
+
+          // Populate items
+          const quoteItems: QuoteItemInput[] = quoteWithItems.items.map(item => ({
+            item_type: item.item_type,
+            label: item.label,
+            width_mm: item.width_mm,
+            height_mm: item.height_mm,
+            quantity: item.quantity,
+            configuration: item.configuration,
+            base_cost: item.base_cost,
+            price_without_vat: item.price_without_vat,
+            vat_rate: item.vat_rate,
+            total_with_vat: item.total_with_vat,
+            profile_series_id: item.profile_series_id,
+            profile_length_m: item.profile_length_m,
+            glass_area_sqm: item.glass_area_sqm,
+          }));
+          setItems(quoteItems);
+
+          // Set pricing controls from quote totals
+          setVatRate(quoteWithItems.vat_rate);
+          // Note: markup/discount are not stored in quote, so keep defaults
+
+          // Switch to price tab to show loaded items
+          setActiveTab('price');
+        }
+      } catch (error) {
+        console.error('Failed to load quote for edit:', error);
+        setErrors(['Eroare la încărcarea ofertei pentru editare.']);
+      }
+    };
+
+    loadQuoteForEdit();
+  }, [editQuoteId]);
+
   // Calculate totals from items with pricing adjustments
   const totals = useMemo(() => {
-    // Sum of base costs (material costs)
-    const totalMaterialCost = items.reduce((sum, item) => sum + item.base_cost * item.quantity, 0);
-    
-    // Sum of prices without VAT (before markup/discount adjustments)
-    const subtotalBeforeAdjustments = items.reduce((sum, item) => sum + item.price_without_vat * item.quantity, 0);
-    
-    // Apply markup
-    const priceWithMarkup = totalMaterialCost > 0 
-      ? totalMaterialCost * (1 + markupPercent / 100) + markupFixed 
-      : 0;
-    
-    // Apply discount
-    const discountAmount = priceWithMarkup > 0 
-      ? (priceWithMarkup * discountPercent / 100) + discountFixed 
-      : 0;
-    const priceAfterDiscount = Math.max(priceWithMarkup - discountAmount, 0);
-    
-    // Apply VAT
-    const vatAmount = priceAfterDiscount * vatRate;
-    const totalWithVAT = priceAfterDiscount + vatAmount;
-
-    // Calculate discount_total for quote header (difference between subtotal and final price)
-    const discountTotal = subtotalBeforeAdjustments - priceAfterDiscount;
-
-    return {
-      totalMaterialCost,
-      subtotalBeforeAdjustments,
-      priceWithMarkup,
-      discountAmount,
-      priceAfterDiscount,
-      vatAmount,
-      totalWithVAT,
-      discountTotal,
+    return calculatePricingTotals({
+      items,
+      markupPercent,
+      markupFixed,
+      discountPercent,
+      discountFixed,
       vatRate,
-    };
+    });
   }, [items, markupPercent, markupFixed, discountPercent, discountFixed, vatRate]);
 
   const handleAddItem = () => {
-    const validationErrors: string[] = [];
-
     if (!windowConfig) {
-      validationErrors.push('Configurația articolului este invalidă');
-    } else {
-      if (!windowConfig.selectedProfileId) {
-        validationErrors.push('Selectează o serie de profil');
-      }
-      if (!windowConfig.selectedGlassId) {
-        validationErrors.push('Selectează un tip de geam');
-      }
-      if (!windowConfig.selectedHardwareId) {
-        validationErrors.push('Selectează feronerie');
-      }
-      if (!windowConfig.selectedColor) {
-        validationErrors.push('Selectează culoarea');
-      }
-      if (windowConfig.width <= 0 || windowConfig.height <= 0) {
-        validationErrors.push('Dimensiunile trebuie să fie mai mari decât 0');
-      }
+      setErrors(['Configurația articolului este invalidă']);
+      setActiveTab('configurator');
+      return;
     }
 
-    if (currentItemQuantity <= 0) {
-      validationErrors.push('Cantitatea trebuie să fie mai mare decât 0');
-    }
+    const validationErrors = addItem(windowConfig, vatRate);
 
     if (validationErrors.length > 0) {
       setErrors(validationErrors);
@@ -153,65 +152,7 @@ export default function NewQuotePage({ onSave }: NewQuotePageProps) {
       return;
     }
 
-    if (!windowConfig) {
-      return;
-    }
-
     setErrors([]);
-
-    // Build QuoteItemInput from current config
-    // Use base cost from configurator, but we'll apply markup/discount in Price & Export tab
-    const itemInput: QuoteItemInput = {
-      item_type: windowConfig.productType,
-      label: currentItemLabel.trim() || undefined,
-      width_mm: windowConfig.width,
-      height_mm: windowConfig.height,
-      quantity: currentItemQuantity,
-      configuration: {
-        width: windowConfig.width,
-        height: windowConfig.height,
-        selectedProfileId: windowConfig.selectedProfileId,
-        selectedGlassId: windowConfig.selectedGlassId,
-        selectedHardwareId: windowConfig.selectedHardwareId,
-        selectedColor: windowConfig.selectedColor,
-        sashCount: windowConfig.sashCount,
-        sashes: windowConfig.sashes.map(sash => ({
-          id: sash.id,
-          openingType: sash.openingType,
-          fillType: sash.fillType,
-        })),
-        productType: windowConfig.productType,
-        // Store pricing details for reference
-        baseCost: windowConfig.baseCost,
-        markupPercent: windowConfig.markupPercent,
-        markupFixed: windowConfig.markupFixed,
-        discountPercent: windowConfig.discountPercent,
-        discountFixed: windowConfig.discountFixed,
-        sellingPrice: windowConfig.sellingPrice,
-        vatAmount: windowConfig.vatAmount,
-        finalPriceWithVAT: windowConfig.finalPriceWithVAT,
-        profileLengthMeters: windowConfig.profileLengthMeters,
-        glassPieces: windowConfig.glassPieces,
-        glassAreaSqm: windowConfig.glassAreaSqm,
-      },
-      // Store base cost (material cost) - pricing adjustments happen at quote level
-      base_cost: windowConfig.baseCost,
-      // Store the selling price from configurator as initial price_without_vat
-      // This will be adjusted by the Price & Export tab controls
-      price_without_vat: windowConfig.sellingPrice,
-      vat_rate: vatRate,
-      total_with_vat: windowConfig.finalPriceWithVAT,
-      profile_series_id: windowConfig.selectedProfileId,
-      profile_length_m: Math.round(windowConfig.profileLengthMeters * 1000) / 1000,
-      glass_area_sqm: Math.round(windowConfig.glassAreaSqm * 1000) / 1000,
-    };
-
-    // Add to items array
-    setItems([...items, itemInput]);
-
-    // Reset current item
-    setCurrentItemLabel('');
-    setCurrentItemQuantity(1);
     setWindowConfig(null);
     
     // Switch to price tab to see the new item
@@ -219,7 +160,7 @@ export default function NewQuotePage({ onSave }: NewQuotePageProps) {
   };
 
   const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
+    removeItem(index);
   };
 
   const handleExport = async () => {
@@ -263,23 +204,28 @@ export default function NewQuotePage({ onSave }: NewQuotePageProps) {
         items,
       });
 
-      // Reset form
-      setClientInfo({
-        name: '',
-        phone: '',
-        email: '',
-        address: '',
-        reference: '',
-      });
-      setItems([]);
-      setCurrentItemLabel('');
-      setCurrentItemQuantity(1);
-      setWindowConfig(null);
-      setErrors([]);
-      setMarkupPercent(20);
-      setMarkupFixed(0);
-      setDiscountPercent(0);
-      setDiscountFixed(0);
+      // Reset form (only if not in edit mode, or reset after edit)
+      if (!editQuoteId) {
+        setClientInfo({
+          name: '',
+          phone: '',
+          email: '',
+          address: '',
+          reference: '',
+        });
+        setItems([]);
+        resetCurrentItem();
+        setWindowConfig(null);
+        setSelectedTemplate(null);
+        setErrors([]);
+        setMarkupPercent(20);
+        setMarkupFixed(0);
+        setDiscountPercent(0);
+        setDiscountFixed(0);
+      } else {
+        // In edit mode, just clear errors
+        setErrors([]);
+      }
 
       // Navigate to quotes page
       if (onSave) {
@@ -304,8 +250,22 @@ export default function NewQuotePage({ onSave }: NewQuotePageProps) {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
-      <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Ofertă Nouă</h1>
-      <p className="text-sm sm:text-base text-gray-600 mb-6 sm:mb-8">Configurează articolele și generează oferta automată</p>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
+          {editQuoteId ? 'Editează Ofertă' : 'Ofertă Nouă'}
+        </h1>
+        {editQuoteId && onEditCancel && (
+          <button
+            onClick={onEditCancel}
+            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Anulează
+          </button>
+        )}
+      </div>
+      <p className="text-sm sm:text-base text-gray-600 mb-6 sm:mb-8">
+        {editQuoteId ? 'Modifică oferta și exportă ca ofertă nouă' : 'Configurează articolele și generează oferta automată'}
+      </p>
 
       {/* Tab Navigation */}
       <div className="mb-6 border-b border-gray-200">
@@ -431,13 +391,50 @@ export default function NewQuotePage({ onSave }: NewQuotePageProps) {
           <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
             <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">Configurare Articol</h2>
             
-            <WindowConfigurator 
-              onConfigChange={setWindowConfig}
-              initialProfileId={getDefaultConfig.profileId}
-              initialGlassId={getDefaultConfig.glassId}
-              initialHardwareId={getDefaultConfig.hardwareId}
-              hidePricing={true}
-            />
+            {/* Template Selector */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Selectează Șablon <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={selectedTemplate?.id || ''}
+                onChange={(e) => {
+                  const template = PREDEFINED_TEMPLATES.find(t => t.id === e.target.value);
+                  setSelectedTemplate(template || null);
+                }}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+              >
+                <option value="">Selectează un șablon...</option>
+                {PREDEFINED_TEMPLATES.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+              {!selectedTemplate && (
+                <p className="mt-2 text-sm text-gray-500 italic">
+                  Selectează mai întâi un șablon pentru a începe configurarea.
+                </p>
+              )}
+            </div>
+            
+            {selectedTemplate ? (
+              <WindowConfigurator 
+                onConfigChange={setWindowConfig}
+                initialProfileId={getDefaultConfig.profileId}
+                initialGlassId={getDefaultConfig.glassId}
+                initialHardwareId={getDefaultConfig.hardwareId}
+                hidePricing={true}
+                template={selectedTemplate}
+                onTemplateApplied={() => {
+                  // Template applied, configurator is now enabled
+                }}
+              />
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+                <p className="text-gray-600">Selectează un șablon pentru a configura articolul</p>
+              </div>
+            )}
 
             {/* Glass Details Section */}
             {windowConfig && windowConfig.glassPieces.length > 0 && (

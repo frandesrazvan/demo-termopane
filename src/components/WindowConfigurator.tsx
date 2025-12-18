@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import { OpeningType } from '../types';
+import { TemplateDefinition } from '../types/templates';
 
 type ProductType = 'window' | 'door' | 'other';
 
@@ -56,6 +57,8 @@ interface WindowConfiguratorProps {
   initialGlassId?: string;
   initialHardwareId?: string;
   hidePricing?: boolean;
+  template?: TemplateDefinition | null;
+  onTemplateApplied?: () => void;
 }
 
 export default function WindowConfigurator({ 
@@ -64,6 +67,8 @@ export default function WindowConfigurator({
   initialGlassId = '',
   initialHardwareId = '',
   hidePricing = false,
+  template = null,
+  onTemplateApplied,
 }: WindowConfiguratorProps) {
   const { settings } = useStore();
 
@@ -87,6 +92,37 @@ export default function WindowConfigurator({
     if (initialGlassId) setSelectedGlassId(initialGlassId);
     if (initialHardwareId) setSelectedHardwareId(initialHardwareId);
   }, [initialProfileId, initialGlassId, initialHardwareId]);
+
+  // Apply template when it changes
+  useEffect(() => {
+    if (template) {
+      // Set product type
+      setProductType(template.itemType);
+      
+      // Set dimensions
+      setWidth(template.defaultWidthMm);
+      setHeight(template.defaultHeightMm);
+      
+      // Set sash count
+      const count = template.compartments as 1 | 2 | 3;
+      setSashCount(count);
+      
+      // Set sash configurations
+      const newSashes: SashConfig[] = template.sashConfigs.map((config, index) => ({
+        id: String(index + 1),
+        openingType: config.openingType,
+        fillType: config.fillType,
+      }));
+      setSashes(newSashes);
+      
+      // Apply default materials if available (they're already set via initialProfileId, etc.)
+      // The template doesn't override materials, it just sets structure
+      
+      if (onTemplateApplied) {
+        onTemplateApplied();
+      }
+    }
+  }, [template, onTemplateApplied]);
 
   // Sash configurations
   const [sashes, setSashes] = useState<SashConfig[]>([

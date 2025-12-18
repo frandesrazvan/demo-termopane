@@ -3,8 +3,12 @@ import { useStore } from '../store/useStore';
 import { Plus, Trash2, Save } from 'lucide-react';
 import { companySettingsService } from '../services/companySettingsService';
 import { CompanySettings } from '../types';
+import { PROFILE_MANUFACTURERS, PROFILE_TYPES, PROFILE_COLORS } from '../constants/profileConstants';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 export default function SettingsPage() {
+  const { user } = useAuth();
   const {
     settings,
     isLoading,
@@ -103,24 +107,13 @@ export default function SettingsPage() {
       }, {} as Record<string, typeof settings.profileSeries>);
   }, [settings.profileSeries]);
 
-  // Get unique manufacturer suggestions
-  const manufacturerSuggestions = useMemo(() => {
-    const manufacturers = new Set<string>();
-    settings.profileSeries.forEach((p) => {
-      if (p.manufacturer) {
-        manufacturers.add(p.manufacturer);
-      }
-    });
-    return Array.from(manufacturers).sort();
-  }, [settings.profileSeries]);
 
   const [newProfile, setNewProfile] = useState({ 
-    name: '', 
-    manufacturer: '',
     profile_type: '',
+    manufacturer: '',
     color_name: '',
     pricePerMeter: '', 
-    colorCategory: '', 
+    custom_profile_type: '', // For custom profile type entry
     chambers: '5',
     glass_width_deduction_mm: '24',
     glass_height_deduction_mm: '24',
@@ -135,35 +128,42 @@ export default function SettingsPage() {
   };
 
   const handleAddProfile = async () => {
-    if (newProfile.name && newProfile.pricePerMeter && newProfile.chambers) {
-      try {
-        await addProfileSeries({
-          name: newProfile.name,
-          manufacturer: newProfile.manufacturer || null,
-          profile_type: newProfile.profile_type || null,
-          color_name: newProfile.color_name || null,
-          pricePerMeter: parseFloat(newProfile.pricePerMeter),
-          colorCategory: newProfile.color_name || newProfile.colorCategory || '',
-          chambers: parseInt(newProfile.chambers),
-          glass_width_deduction_mm: parseInt(newProfile.glass_width_deduction_mm) || 24,
-          glass_height_deduction_mm: parseInt(newProfile.glass_height_deduction_mm) || 24,
-        });
-        setNewProfile({ 
-          name: '', 
-          manufacturer: '',
-          profile_type: '',
-          color_name: '',
-          pricePerMeter: '', 
-          colorCategory: '', 
-          chambers: '5',
-          glass_width_deduction_mm: '24',
-          glass_height_deduction_mm: '24',
-        });
-        showToast('success', 'Seria de profil a fost adăugată cu succes.');
-      } catch (error) {
-        console.error('Failed to add profile series:', error);
-        showToast('error', 'Eroare la adăugarea seriei de profil. Te rugăm să încerci din nou.');
-      }
+    const profileType = newProfile.profile_type === 'custom' ? newProfile.custom_profile_type : newProfile.profile_type;
+    
+    if (!profileType || !newProfile.manufacturer || !newProfile.color_name || !newProfile.pricePerMeter) {
+      showToast('error', 'Te rugăm să completezi toate câmpurile obligatorii: Tip Profil, Producător, Culoare și Preț.');
+      return;
+    }
+
+    // Auto-generate name from selections: tip_profil > producator > color
+    const generatedName = `${profileType} > ${newProfile.manufacturer} > ${newProfile.color_name}`;
+
+    try {
+      await addProfileSeries({
+        name: generatedName,
+        manufacturer: newProfile.manufacturer || null,
+        profile_type: profileType || null,
+        color_name: newProfile.color_name || null,
+        pricePerMeter: parseFloat(newProfile.pricePerMeter),
+        colorCategory: newProfile.color_name || '',
+        chambers: parseInt(newProfile.chambers),
+        glass_width_deduction_mm: parseInt(newProfile.glass_width_deduction_mm) || 24,
+        glass_height_deduction_mm: parseInt(newProfile.glass_height_deduction_mm) || 24,
+      });
+      setNewProfile({ 
+        profile_type: '',
+        manufacturer: '',
+        color_name: '',
+        pricePerMeter: '', 
+        custom_profile_type: '',
+        chambers: '5',
+        glass_width_deduction_mm: '24',
+        glass_height_deduction_mm: '24',
+      });
+      showToast('success', 'Seria de profil a fost adăugată cu succes.');
+    } catch (error) {
+      console.error('Failed to add profile series:', error);
+      showToast('error', 'Eroare la adăugarea seriei de profil. Te rugăm să încerci din nou.');
     }
   };
 
@@ -262,25 +262,14 @@ export default function SettingsPage() {
                   <div key={profile.id} className="flex flex-col sm:grid sm:grid-cols-[1fr_10rem_8rem_7rem_6rem_7rem_7rem_auto] items-stretch sm:items-center gap-2 p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1 min-w-0">
                       <label className="block text-xs font-medium text-gray-600 mb-1 sm:hidden">Nume Serie</label>
-                      <input
-                        type="text"
-                        value={profile.name}
-                        onChange={(e) => {
-                          updateProfileSeries(profile.id, { name: e.target.value }).catch((error) => {
-                            console.error('Failed to update profile series:', error);
-                            showToast('error', 'Eroare la actualizarea seriei de profil.');
-                          });
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                        placeholder="Nume serie"
-                      />
+                      <div className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm text-gray-700">
+                        {profile.name || `${profile.profile_type || 'N/A'} > ${profile.manufacturer || 'N/A'} > ${profile.color_name || profile.colorCategory || 'N/A'}`}
+                      </div>
                     </div>
                     <div className="w-full sm:w-auto">
                       <label className="block text-xs font-medium text-gray-600 mb-1 sm:hidden">Producător</label>
-                      <input
-                        type="text"
-                        list={`manufacturer-list-${profile.id}`}
-                        value={profile.manufacturer || ''}
+                      <select
+                        value={profile.manufacturer && PROFILE_MANUFACTURERS.includes(profile.manufacturer as any) ? profile.manufacturer : ''}
                         onChange={(e) => {
                           updateProfileSeries(profile.id, { manufacturer: e.target.value || null }).catch((error) => {
                             console.error('Failed to update profile series:', error);
@@ -288,19 +277,33 @@ export default function SettingsPage() {
                           });
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                        placeholder="Producător"
-                      />
-                      <datalist id={`manufacturer-list-${profile.id}`}>
-                        {manufacturerSuggestions.map((m) => (
-                          <option key={m} value={m} />
+                      >
+                        <option value="">Selectează...</option>
+                        {PROFILE_MANUFACTURERS.map((manufacturer) => (
+                          <option key={manufacturer} value={manufacturer}>
+                            {manufacturer}
+                          </option>
                         ))}
-                      </datalist>
+                      </select>
+                      {profile.manufacturer && !PROFILE_MANUFACTURERS.includes(profile.manufacturer as any) && (
+                        <input
+                          type="text"
+                          value={profile.manufacturer}
+                          onChange={(e) => {
+                            updateProfileSeries(profile.id, { manufacturer: e.target.value || null }).catch((error) => {
+                              console.error('Failed to update profile series:', error);
+                              showToast('error', 'Eroare la actualizarea seriei de profil.');
+                            });
+                          }}
+                          className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          placeholder="Producător personalizat"
+                        />
+                      )}
                     </div>
                     <div className="w-full sm:w-auto">
                       <label className="block text-xs font-medium text-gray-600 mb-1 sm:hidden">Tip Profil</label>
-                      <input
-                        type="text"
-                        value={profile.profile_type || ''}
+                      <select
+                        value={profile.profile_type && PROFILE_TYPES.includes(profile.profile_type as any) ? profile.profile_type : ''}
                         onChange={(e) => {
                           updateProfileSeries(profile.id, { profile_type: e.target.value || null }).catch((error) => {
                             console.error('Failed to update profile series:', error);
@@ -308,13 +311,32 @@ export default function SettingsPage() {
                           });
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                        placeholder="toc, cercevea..."
-                      />
+                      >
+                        <option value="">Selectează...</option>
+                        {PROFILE_TYPES.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                      {profile.profile_type && !PROFILE_TYPES.includes(profile.profile_type as any) && (
+                        <input
+                          type="text"
+                          value={profile.profile_type}
+                          onChange={(e) => {
+                            updateProfileSeries(profile.id, { profile_type: e.target.value || null }).catch((error) => {
+                              console.error('Failed to update profile series:', error);
+                              showToast('error', 'Eroare la actualizarea seriei de profil.');
+                            });
+                          }}
+                          className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          placeholder="Tip profil personalizat"
+                        />
+                      )}
                     </div>
                     <div className="w-full sm:w-auto">
                       <label className="block text-xs font-medium text-gray-600 mb-1 sm:hidden">Culoare</label>
-                      <input
-                        type="text"
+                      <select
                         value={profile.color_name || profile.colorCategory || ''}
                         onChange={(e) => {
                           const value = e.target.value;
@@ -327,8 +349,14 @@ export default function SettingsPage() {
                           });
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                        placeholder="Alb, Antracit..."
-                      />
+                      >
+                        <option value="">Selectează...</option>
+                        {PROFILE_COLORS.map((color) => (
+                          <option key={color} value={color}>
+                            {color}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div className="w-full sm:w-auto">
                       <label className="block text-xs font-medium text-gray-600 mb-1 sm:hidden">Preț (RON/m)</label>
@@ -384,9 +412,14 @@ export default function SettingsPage() {
                             try {
                               await deleteProfileSeries(profile.id);
                               showToast('success', 'Seria de profil a fost ștearsă.');
-                            } catch (error) {
+                            } catch (error: any) {
                               console.error('Failed to delete profile series:', error);
-                              showToast('error', 'Eroare la ștergerea seriei de profil.');
+                              // Check if it's a foreign key constraint error or our custom error
+                              if (error?.code === '23503' || error?.code === 'PROFILE_IN_USE' || error?.message?.includes('folosită')) {
+                                showToast('error', error.message || 'Nu poți șterge această serie de profil deoarece este folosită în una sau mai multe oferte. Te rugăm să ștergi sau să modifici ofertele care o folosesc înainte.');
+                              } else {
+                                showToast('error', error?.message || 'Eroare la ștergerea seriei de profil.');
+                              }
                             }
                           }
                         }}
@@ -402,104 +435,154 @@ export default function SettingsPage() {
             </div>
           ))}
 
-          {/* Add new profile row */}
-          <div className="hidden sm:grid sm:grid-cols-[1fr_10rem_8rem_7rem_6rem_7rem_7rem_auto] gap-2 px-3 py-2 mb-2 bg-blue-100 rounded-lg border border-blue-200">
-            <div className="text-xs font-semibold text-gray-700">Nume Serie</div>
-            <div className="text-xs font-semibold text-gray-700">Producător</div>
-            <div className="text-xs font-semibold text-gray-700">Tip Profil</div>
-            <div className="text-xs font-semibold text-gray-700">Culoare</div>
-            <div className="text-xs font-semibold text-gray-700">Preț (RON/m)</div>
-            <div className="text-xs font-semibold text-gray-700">Ded. Lăț. (mm)</div>
-            <div className="text-xs font-semibold text-gray-700">Ded. Înălț. (mm)</div>
-            <div className="text-xs font-semibold text-gray-700 text-center">Acțiuni</div>
-          </div>
+          {/* Add new profile form */}
+          <div className="bg-blue-50 rounded-lg border-2 border-blue-200 p-4 sm:p-6">
+            <h3 className="text-base font-semibold text-gray-800 mb-4">Adaugă Profil Nou</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              {/* Tip Profil */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tip Profil <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={newProfile.profile_type}
+                  onChange={(e) => setNewProfile({ ...newProfile, profile_type: e.target.value, custom_profile_type: '' })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Selectează tip profil...</option>
+                  {PROFILE_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                  <option value="custom">Alt tip (introdu manual)</option>
+                </select>
+                {newProfile.profile_type === 'custom' && (
+                  <input
+                    type="text"
+                    value={newProfile.custom_profile_type}
+                    onChange={(e) => setNewProfile({ ...newProfile, custom_profile_type: e.target.value })}
+                    className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Introdu tip profil..."
+                  />
+                )}
+              </div>
 
-          <div className="flex flex-col sm:grid sm:grid-cols-[1fr_10rem_8rem_7rem_6rem_7rem_7rem_auto] items-stretch sm:items-center gap-2 p-3 bg-blue-50 rounded-lg border-2 border-blue-200">
-            <div className="flex-1 min-w-0">
-              <label className="block text-xs font-medium text-gray-600 mb-1 sm:hidden">Nume Serie</label>
-              <input
-                type="text"
-                value={newProfile.name}
-                onChange={(e) => setNewProfile({ ...newProfile, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                placeholder="Nume serie nouă"
-              />
+              {/* Producător */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Producător <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={newProfile.manufacturer}
+                  onChange={(e) => setNewProfile({ ...newProfile, manufacturer: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Selectează producător...</option>
+                  {PROFILE_MANUFACTURERS.map((manufacturer) => (
+                    <option key={manufacturer} value={manufacturer}>
+                      {manufacturer}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Culoare */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Culoare <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={newProfile.color_name}
+                  onChange={(e) => setNewProfile({ ...newProfile, color_name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Selectează culoare...</option>
+                  {PROFILE_COLORS.map((color) => (
+                    <option key={color} value={color}>
+                      {color}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Preț */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Preț (RON/m) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={newProfile.pricePerMeter}
+                  onChange={(e) => setNewProfile({ ...newProfile, pricePerMeter: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="13.00"
+                />
+              </div>
             </div>
-            <div className="w-full sm:w-auto">
-              <label className="block text-xs font-medium text-gray-600 mb-1 sm:hidden">Producător</label>
-              <input
-                type="text"
-                list="manufacturer-list-new"
-                value={newProfile.manufacturer}
-                onChange={(e) => setNewProfile({ ...newProfile, manufacturer: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                placeholder="Producător"
-              />
-              <datalist id="manufacturer-list-new">
-                {manufacturerSuggestions.map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
-            </div>
-            <div className="w-full sm:w-auto">
-              <label className="block text-xs font-medium text-gray-600 mb-1 sm:hidden">Tip Profil</label>
-              <input
-                type="text"
-                value={newProfile.profile_type}
-                onChange={(e) => setNewProfile({ ...newProfile, profile_type: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                placeholder="toc, cercevea..."
-              />
-            </div>
-            <div className="w-full sm:w-auto">
-              <label className="block text-xs font-medium text-gray-600 mb-1 sm:hidden">Culoare</label>
-              <input
-                type="text"
-                value={newProfile.color_name}
-                onChange={(e) => setNewProfile({ ...newProfile, color_name: e.target.value, colorCategory: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                placeholder="Alb, Antracit..."
-              />
-            </div>
-            <div className="w-full sm:w-auto">
-              <label className="block text-xs font-medium text-gray-600 mb-1 sm:hidden">Preț (RON/m)</label>
-              <input
-                type="number"
-                value={newProfile.pricePerMeter}
-                onChange={(e) => setNewProfile({ ...newProfile, pricePerMeter: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                placeholder="RON/metru"
-              />
-            </div>
-            <div className="w-full sm:w-auto">
-              <label className="block text-xs font-medium text-gray-600 mb-1 sm:hidden">Ded. Lăț. (mm)</label>
-              <input
-                type="number"
-                value={newProfile.glass_width_deduction_mm}
-                onChange={(e) => setNewProfile({ ...newProfile, glass_width_deduction_mm: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs"
-                placeholder="Lăț. (mm)"
-                title="Deducere lățime sticlă (mm)"
-              />
-            </div>
-            <div className="w-full sm:w-auto">
-              <label className="block text-xs font-medium text-gray-600 mb-1 sm:hidden">Ded. Înălț. (mm)</label>
-              <input
-                type="number"
-                value={newProfile.glass_height_deduction_mm}
-                onChange={(e) => setNewProfile({ ...newProfile, glass_height_deduction_mm: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs"
-                placeholder="Înălț. (mm)"
-                title="Deducere înălțime sticlă (mm)"
-              />
-            </div>
-            <div className="flex justify-center sm:justify-start">
+
+            {/* Advanced options (collapsible) */}
+            <details className="mt-4">
+              <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-800 font-medium">
+                Opțiuni avansate (Deduceri sticlă, Camere)
+              </summary>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-200">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Deducere Lățime (mm)
+                  </label>
+                  <input
+                    type="number"
+                    value={newProfile.glass_width_deduction_mm}
+                    onChange={(e) => setNewProfile({ ...newProfile, glass_width_deduction_mm: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    placeholder="24"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Deducere Înălțime (mm)
+                  </label>
+                  <input
+                    type="number"
+                    value={newProfile.glass_height_deduction_mm}
+                    onChange={(e) => setNewProfile({ ...newProfile, glass_height_deduction_mm: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    placeholder="24"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Camere
+                  </label>
+                  <input
+                    type="number"
+                    value={newProfile.chambers}
+                    onChange={(e) => setNewProfile({ ...newProfile, chambers: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    placeholder="5"
+                  />
+                </div>
+              </div>
+            </details>
+
+            {/* Preview and Add button */}
+            <div className="mt-4 pt-4 border-t border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              {newProfile.profile_type && newProfile.manufacturer && newProfile.color_name && (
+                <div className="text-sm text-gray-600">
+                  <span className="font-medium">Nume generat:</span>{' '}
+                  <span className="text-blue-700 font-semibold">
+                    {newProfile.profile_type === 'custom' ? newProfile.custom_profile_type : newProfile.profile_type} &gt; {newProfile.manufacturer} &gt; {newProfile.color_name}
+                  </span>
+                </div>
+              )}
               <button
                 onClick={handleAddProfile}
-                className="p-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                title="Adaugă"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
               >
                 <Plus className="w-5 h-5" />
+                Adaugă Profil
               </button>
             </div>
           </div>
@@ -748,15 +831,65 @@ export default function SettingsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Logo URL
+                Logo Firmă
               </label>
               <input
-                type="url"
-                value={companySettings.logo_url}
-                onChange={(e) => setCompanySettings({ ...companySettings, logo_url: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="https://..."
+                type="file"
+                accept="image/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file || !user) {
+                    return;
+                  }
+
+                  try {
+                    // Upload to Supabase Storage
+                    const fileExt = file.name.split('.').pop();
+                    const filePath = `${user.id}/${Date.now()}.${fileExt}`;
+
+                    const { error: uploadError } = await supabase.storage
+                      .from('company-logos')
+                      .upload(filePath, file, {
+                        cacheControl: '3600',
+                        upsert: false,
+                      });
+
+                    if (uploadError) {
+                      console.error('Error uploading logo:', uploadError);
+                      showToast('error', 'Eroare la încărcarea logo-ului. Te rugăm să încerci din nou.');
+                      return;
+                    }
+
+                    // Get public URL
+                    const { data: publicUrlData } = supabase.storage
+                      .from('company-logos')
+                      .getPublicUrl(filePath);
+
+                    const publicUrl = publicUrlData?.publicUrl;
+                    if (publicUrl) {
+                      setCompanySettings(prev => ({ ...prev, logo_url: publicUrl }));
+                      showToast('success', 'Logo-ul a fost încărcat cu succes.');
+                    }
+                  } catch (error) {
+                    console.error('Error handling logo upload:', error);
+                    showToast('error', 'Eroare la încărcarea logo-ului. Te rugăm să încerci din nou.');
+                  }
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               />
+              {companySettings.logo_url && (
+                <div className="mt-3">
+                  <p className="text-xs text-gray-600 mb-2">Preview logo curent:</p>
+                  <img 
+                    src={companySettings.logo_url} 
+                    alt="Logo firmă" 
+                    className="h-16 border border-gray-200 rounded"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
