@@ -120,7 +120,7 @@ export default function QuotesPage({ onEditQuote }: QuotesPageProps) {
     });
   };
 
-  // Filter quotes based on search term
+  // Filter quotes based on search term (client_name or reference only)
   const filteredQuotes = useMemo(() => {
     if (!searchTerm.trim()) {
       return quotes;
@@ -128,12 +128,9 @@ export default function QuotesPage({ onEditQuote }: QuotesPageProps) {
 
     const term = searchTerm.toLowerCase();
     return quotes.filter((q) => {
-      const dateStr = formatDate(q.created_at);
       return (
         q.client_name?.toLowerCase().includes(term) ||
-        q.reference?.toLowerCase().includes(term) ||
-        q.client_address?.toLowerCase().includes(term) ||
-        dateStr.toLowerCase().includes(term)
+        q.reference?.toLowerCase().includes(term)
       );
     });
   }, [quotes, searchTerm]);
@@ -151,7 +148,7 @@ export default function QuotesPage({ onEditQuote }: QuotesPageProps) {
             <input
               type="text"
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Caută după client, referință, locație sau dată..."
+              placeholder="Caută după client sau referință..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />

@@ -7,9 +7,9 @@ import { Plus, Trash2, FileDown } from 'lucide-react';
 import { companySettingsService } from '../services/companySettingsService';
 import { PREDEFINED_TEMPLATES } from '../config/templates';
 import { TemplateDefinition } from '../types/templates';
-import { OfferTab, ClientInfoState, NewQuotePageProps } from '../types';
+import { OfferTab, NewQuotePageProps } from '../types';
 import { calculatePricingTotals } from '../utils/priceCalculator';
-import { useQuoteBasket } from '../hooks/useQuoteBasket';
+import { useQuoteDraft } from '../hooks/useQuoteDraft';
 
 export default function NewQuotePage({ onSave, editQuoteId, onEditCancel }: NewQuotePageProps) {
   const { settings } = useStore();
@@ -17,18 +17,9 @@ export default function NewQuotePage({ onSave, editQuoteId, onEditCancel }: NewQ
   // Tab state
   const [activeTab, setActiveTab] = useState<OfferTab>('client');
 
-  // Client info state
-  const [clientInfo, setClientInfo] = useState<ClientInfoState>({
-    name: '',
-    phone: '',
-    email: '',
-    address: '',
-    reference: '',
-  });
-
-  // Items basket state (using custom hook)
-  const basket = useQuoteBasket();
-  const { items, currentItemLabel, currentItemQuantity, setCurrentItemLabel, setCurrentItemQuantity, addItem, removeItem, setItems, resetCurrentItem } = basket;
+  // Quote draft state (client info + basket)
+  const draft = useQuoteDraft();
+  const { clientInfo, setClientInfo, items, currentItemLabel, currentItemQuantity, setCurrentItemLabel, setCurrentItemQuantity, addItem, removeItem, setItems, resetDraft } = draft;
 
   // Current item configuration
   const [windowConfig, setWindowConfig] = useState<WindowConfigData | null>(null);
@@ -206,15 +197,7 @@ export default function NewQuotePage({ onSave, editQuoteId, onEditCancel }: NewQ
 
       // Reset form (only if not in edit mode, or reset after edit)
       if (!editQuoteId) {
-        setClientInfo({
-          name: '',
-          phone: '',
-          email: '',
-          address: '',
-          reference: '',
-        });
-        setItems([]);
-        resetCurrentItem();
+        resetDraft();
         setWindowConfig(null);
         setSelectedTemplate(null);
         setErrors([]);

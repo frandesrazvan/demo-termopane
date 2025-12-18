@@ -26,12 +26,6 @@ export default function SettingsPage() {
     deleteHardware,
   } = useStore();
 
-  useEffect(() => {
-    loadProfileSeries();
-    loadCompanySettings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Company settings state
   const [companySettings, setCompanySettings] = useState<Omit<CompanySettings, 'id'>>({
     company_name: '',
@@ -46,14 +40,36 @@ export default function SettingsPage() {
     default_hardware_id: null,
   });
   const [isSavingCompany, setIsSavingCompany] = useState(false);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
+  const [logoLoadError, setLogoLoadError] = useState(false);
+
+  useEffect(() => {
+    loadProfileSeries();
+    loadCompanySettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Clean up blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (logoPreviewUrl) {
+        URL.revokeObjectURL(logoPreviewUrl);
+      }
+    };
+  }, [logoPreviewUrl]);
 
   const loadCompanySettings = async () => {
     try {
       const settings = await companySettingsService.get();
       if (settings) {
+        const logoUrl = settings.logo_url || '';
+        console.log('Loaded company settings - logo_url:', logoUrl);
         setCompanySettings({
           company_name: settings.company_name,
-          logo_url: settings.logo_url || '',
+          logo_url: logoUrl,
           address: settings.address || '',
           phone: settings.phone || '',
           email: settings.email || '',
@@ -63,6 +79,8 @@ export default function SettingsPage() {
           default_glass_id: settings.default_glass_id,
           default_hardware_id: settings.default_hardware_id,
         });
+        // Reset logo load error when loading new settings
+        setLogoLoadError(false);
       }
     } catch (error) {
       console.error('Failed to load company settings:', error);
@@ -78,7 +96,22 @@ export default function SettingsPage() {
 
     setIsSavingCompany(true);
     try {
-      await companySettingsService.save(companySettings);
+      const saved = await companySettingsService.save(companySettings);
+      // Reload settings to ensure we have the latest data
+      if (saved) {
+        setCompanySettings({
+          company_name: saved.company_name,
+          logo_url: saved.logo_url || '',
+          address: saved.address || '',
+          phone: saved.phone || '',
+          email: saved.email || '',
+          registration_number: saved.registration_number || '',
+          tax_id: saved.tax_id || '',
+          default_profile_series_id: saved.default_profile_series_id,
+          default_glass_id: saved.default_glass_id,
+          default_hardware_id: saved.default_hardware_id,
+        });
+      }
       showToast('success', 'Informațiile firmei au fost salvate cu succes.');
     } catch (error) {
       console.error('Failed to save company settings:', error);
@@ -836,12 +869,22 @@ export default function SettingsPage() {
               <input
                 type="file"
                 accept="image/*"
+                disabled={isUploadingLogo}
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (!file || !user) {
                     return;
                   }
 
+                  // Show filename immediately
+                  setUploadedFileName(file.name);
+                  setUploadedFileUrl(null);
+
+                  // Show local preview immediately
+                  const blobUrl = URL.createObjectURL(file);
+                  setLogoPreviewUrl(blobUrl);
+
+                  setIsUploadingLogo(true);
                   try {
                     // Upload to Supabase Storage
                     const fileExt = file.name.split('.').pop();
@@ -857,6 +900,10 @@ export default function SettingsPage() {
                     if (uploadError) {
                       console.error('Error uploading logo:', uploadError);
                       showToast('error', 'Eroare la încărcarea logo-ului. Te rugăm să încerci din nou.');
+                      // Clean up blob URL on error
+                      URL.revokeObjectURL(blobUrl);
+                      setLogoPreviewUrl(null);
+                      setUploadedFileName(null);
                       return;
                     }
 
@@ -866,29 +913,100 @@ export default function SettingsPage() {
                       .getPublicUrl(filePath);
 
                     const publicUrl = publicUrlData?.publicUrl;
+                    console.log('Uploaded logo - public URL:', publicUrl);
                     if (publicUrl) {
+                      // Clean up blob URL and set the public URL
+                      URL.revokeObjectURL(blobUrl);
+                      setLogoPreviewUrl(null);
+                      setUploadedFileUrl(publicUrl);
                       setCompanySettings(prev => ({ ...prev, logo_url: publicUrl }));
-                      showToast('success', 'Logo-ul a fost încărcat cu succes.');
+                      setLogoLoadError(false); // Reset error state
+                      showToast('success', `Logo-ul "${file.name}" a fost încărcat cu succes. Nu uita să salvezi setările!`);
+                      
+                      // Reset file input
+                      e.target.value = '';
+                    } else {
+                      console.error('Failed to get public URL');
+                      showToast('error', 'Eroare la obținerea URL-ului public. Te rugăm să încerci din nou.');
+                      URL.revokeObjectURL(blobUrl);
+                      setLogoPreviewUrl(null);
+                      setUploadedFileName(null);
                     }
                   } catch (error) {
                     console.error('Error handling logo upload:', error);
                     showToast('error', 'Eroare la încărcarea logo-ului. Te rugăm să încerci din nou.');
+                    if (logoPreviewUrl) {
+                      URL.revokeObjectURL(logoPreviewUrl);
+                      setLogoPreviewUrl(null);
+                    }
+                    setUploadedFileName(null);
+                  } finally {
+                    setIsUploadingLogo(false);
                   }
                 }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               />
-              {companySettings.logo_url && (
-                <div className="mt-3">
-                  <p className="text-xs text-gray-600 mb-2">Preview logo curent:</p>
-                  <img 
-                    src={companySettings.logo_url} 
-                    alt="Logo firmă" 
-                    className="h-16 border border-gray-200 rounded"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
+              {isUploadingLogo && (
+                <p className="mt-2 text-xs text-blue-600">Se încarcă logo-ul...</p>
+              )}
+              {uploadedFileName && !isUploadingLogo && (
+                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+                  <p className="text-green-800 font-medium">✓ Fișier încărcat: {uploadedFileName}</p>
+                  {uploadedFileUrl && (
+                    <p className="text-green-700 mt-1 break-all">URL: {uploadedFileUrl}</p>
+                  )}
                 </div>
+              )}
+              {/* Always show logo section if there's a URL or preview */}
+              {(logoPreviewUrl || (companySettings.logo_url && companySettings.logo_url.trim())) ? (
+                <div className="mt-3">
+                  <p className="text-xs text-gray-600 mb-2">
+                    {logoPreviewUrl ? 'Preview logo nou (nu uita să salvezi):' : 'Preview logo curent:'}
+                  </p>
+                  <div className="relative">
+                    {!logoLoadError ? (
+                      <img 
+                        key={logoPreviewUrl || companySettings.logo_url || 'logo'}
+                        src={logoPreviewUrl || companySettings.logo_url || ''} 
+                        alt="Logo firmă" 
+                        className="h-40 md:h-48 w-auto max-w-full border border-gray-200 rounded object-contain bg-white p-2"
+                        onError={() => {
+                          console.error('Failed to load logo image from:', logoPreviewUrl || companySettings.logo_url);
+                          setLogoLoadError(true);
+                        }}
+                        onLoad={() => {
+                          setLogoLoadError(false);
+                        }}
+                      />
+                    ) : (
+                      <div className="h-40 md:h-48 border border-red-200 rounded bg-red-50 flex items-center justify-center p-2">
+                        <p className="text-xs text-red-600 text-center">
+                          Eroare la încărcarea imaginii.<br />
+                          Verifică URL-ul sau încarcă din nou.
+                        </p>
+                      </div>
+                    )}
+                    {/* Always show the saved URL for debugging */}
+                    {companySettings.logo_url && companySettings.logo_url.trim() && !logoPreviewUrl && (
+                      <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-xs">
+                        <p className="text-gray-600 font-medium">Logo salvat:</p>
+                        <p className="text-gray-500 break-all mt-1">{companySettings.logo_url}</p>
+                        {logoLoadError && (
+                          <button
+                            onClick={() => {
+                              setLogoLoadError(false);
+                            }}
+                            className="mt-2 text-xs text-blue-600 hover:text-blue-800 underline"
+                          >
+                            Reîncearcă încărcarea
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-gray-500 italic">Niciun logo încărcat</p>
               )}
             </div>
             <div>

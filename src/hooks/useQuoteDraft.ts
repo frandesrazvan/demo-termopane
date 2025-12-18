@@ -1,8 +1,14 @@
 import { useState } from 'react';
 import { QuoteItemInput } from '../types/quotes';
+import { ClientInfoState } from '../types';
 import { WindowConfigData } from '../components/WindowConfigurator';
 
-export interface UseQuoteBasketReturn {
+export interface UseQuoteDraftReturn {
+  // Client info
+  clientInfo: ClientInfoState;
+  setClientInfo: React.Dispatch<React.SetStateAction<ClientInfoState>>;
+  
+  // Basket state
   items: QuoteItemInput[];
   currentItemLabel: string;
   currentItemQuantity: number;
@@ -12,12 +18,25 @@ export interface UseQuoteBasketReturn {
   removeItem: (index: number) => void;
   setItems: React.Dispatch<React.SetStateAction<QuoteItemInput[]>>;
   resetCurrentItem: () => void;
+  
+  // Reset all draft state
+  resetDraft: () => void;
 }
 
 /**
- * Custom hook for managing quote basket (items list)
+ * Custom hook for managing quote draft state (client info + basket)
  */
-export function useQuoteBasket(): UseQuoteBasketReturn {
+export function useQuoteDraft(): UseQuoteDraftReturn {
+  // Client info state
+  const [clientInfo, setClientInfo] = useState<ClientInfoState>({
+    name: '',
+    phone: '',
+    email: '',
+    address: '',
+    reference: '',
+  });
+
+  // Items basket state
   const [items, setItems] = useState<QuoteItemInput[]>([]);
   const [currentItemLabel, setCurrentItemLabel] = useState('');
   const [currentItemQuantity, setCurrentItemQuantity] = useState(1);
@@ -59,7 +78,6 @@ export function useQuoteBasket(): UseQuoteBasketReturn {
     }
 
     // Build QuoteItemInput from current config
-    // Use base cost from configurator, but we'll apply markup/discount in Price & Export tab
     const itemInput: QuoteItemInput = {
       item_type: windowConfig.productType,
       label: currentItemLabel.trim() || undefined,
@@ -80,7 +98,6 @@ export function useQuoteBasket(): UseQuoteBasketReturn {
           fillType: sash.fillType,
         })),
         productType: windowConfig.productType,
-        // Store pricing details for reference
         baseCost: windowConfig.baseCost,
         markupPercent: windowConfig.markupPercent,
         markupFixed: windowConfig.markupFixed,
@@ -93,10 +110,7 @@ export function useQuoteBasket(): UseQuoteBasketReturn {
         glassPieces: windowConfig.glassPieces,
         glassAreaSqm: windowConfig.glassAreaSqm,
       },
-      // Store base cost (material cost) - pricing adjustments happen at quote level
       base_cost: windowConfig.baseCost,
-      // Store the selling price from configurator as initial price_without_vat
-      // This will be adjusted by the Price & Export tab controls
       price_without_vat: windowConfig.sellingPrice,
       vat_rate: vatRate,
       total_with_vat: windowConfig.finalPriceWithVAT,
@@ -105,10 +119,7 @@ export function useQuoteBasket(): UseQuoteBasketReturn {
       glass_area_sqm: Math.round(windowConfig.glassAreaSqm * 1000) / 1000,
     };
 
-    // Add to items array
     setItems([...items, itemInput]);
-
-    // Reset current item
     resetCurrentItem();
 
     return [];
@@ -118,7 +129,21 @@ export function useQuoteBasket(): UseQuoteBasketReturn {
     setItems(items.filter((_, i) => i !== index));
   };
 
+  const resetDraft = () => {
+    setClientInfo({
+      name: '',
+      phone: '',
+      email: '',
+      address: '',
+      reference: '',
+    });
+    setItems([]);
+    resetCurrentItem();
+  };
+
   return {
+    clientInfo,
+    setClientInfo,
     items,
     currentItemLabel,
     currentItemQuantity,
@@ -128,6 +153,7 @@ export function useQuoteBasket(): UseQuoteBasketReturn {
     removeItem,
     setItems,
     resetCurrentItem,
+    resetDraft,
   };
 }
 

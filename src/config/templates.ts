@@ -1,87 +1,74 @@
-import { TemplateDefinition } from '../types/templates';
+// src/config/templates.ts
+
+export type TemplateItemType = 'window' | 'door' | 'other';
+
+export interface TemplateDefinition {
+  id: string;
+  name: string;
+  itemType: TemplateItemType;
+  defaultWidthMm: number;
+  defaultHeightMm: number;
+  compartments: number;
+  sashConfigs: {
+    openingType: 'fixed' | 'turn' | 'tilt-turn';
+    fillType: 'glass' | 'panel';
+  }[];
+}
 
 export const PREDEFINED_TEMPLATES: TemplateDefinition[] = [
   {
-    id: 'geam-simplu-batant',
-    name: 'Geam simplu batant (1 canat)',
+    id: 'geam-1-canat',
+    name: 'Geam Simplu (1 Canat)',
     itemType: 'window',
-    defaultWidthMm: 1000,
+    defaultWidthMm: 800,
     defaultHeightMm: 1200,
     compartments: 1,
-    sashConfigs: [
-      { openingType: 'tilt-turn', fillType: 'glass' },
-    ],
+    sashConfigs: [{ openingType: 'tilt-turn', fillType: 'glass' }]
   },
   {
-    id: 'geam-dublu-batant',
-    name: 'Geam dublu batant (2 canate)',
+    id: 'geam-2-canate',
+    name: 'Geam Dublu (2 Canate)',
     itemType: 'window',
     defaultWidthMm: 1400,
     defaultHeightMm: 1200,
     compartments: 2,
     sashConfigs: [
-      { openingType: 'tilt-turn', fillType: 'glass' },
-      { openingType: 'tilt-turn', fillType: 'glass' },
-    ],
+      { openingType: 'fixed', fillType: 'glass' },
+      { openingType: 'tilt-turn', fillType: 'glass' }
+    ]
   },
   {
-    id: 'geam-triplu-batant',
-    name: 'Geam triplu batant (3 canate)',
+    id: 'geam-3-canate',
+    name: 'Geam Triplu (3 Canate)',
     itemType: 'window',
     defaultWidthMm: 2100,
     defaultHeightMm: 1200,
     compartments: 3,
     sashConfigs: [
+      { openingType: 'fixed', fillType: 'glass' },
       { openingType: 'tilt-turn', fillType: 'glass' },
-      { openingType: 'tilt-turn', fillType: 'glass' },
-      { openingType: 'tilt-turn', fillType: 'glass' },
-    ],
+      { openingType: 'fixed', fillType: 'glass' }
+    ]
   },
   {
     id: 'usa-simpla',
-    name: 'Ușă simplă (1 canat)',
+    name: 'Ușă Simplă (Panel PVC)',
     itemType: 'door',
     defaultWidthMm: 900,
-    defaultHeightMm: 2100,
+    defaultHeightMm: 2000,
     compartments: 1,
-    sashConfigs: [
-      { openingType: 'turn', fillType: 'glass' },
-    ],
+    sashConfigs: [{ openingType: 'turn', fillType: 'panel' }]
   },
   {
-    id: 'usa-dubla-1-geam-1-panel',
-    name: 'Ușă dublă (1 geam + 1 panel PVC)',
+    id: 'usa-dubla-mix',
+    name: 'Ușă Dublă (Sticlă + Panel)',
     itemType: 'door',
     defaultWidthMm: 1600,
-    defaultHeightMm: 2100,
+    defaultHeightMm: 2000,
     compartments: 2,
     sashConfigs: [
       { openingType: 'turn', fillType: 'glass' },
-      { openingType: 'fixed', fillType: 'panel' },
-    ],
-  },
-  {
-    id: 'geam-fix',
-    name: 'Geam fix (1 compartiment)',
-    itemType: 'window',
-    defaultWidthMm: 1000,
-    defaultHeightMm: 1200,
-    compartments: 1,
-    sashConfigs: [
-      { openingType: 'fixed', fillType: 'glass' },
-    ],
-  },
-  {
-    id: 'geam-dublu-1-batant-1-fix',
-    name: 'Geam dublu (1 batant + 1 fix)',
-    itemType: 'window',
-    defaultWidthMm: 1400,
-    defaultHeightMm: 1200,
-    compartments: 2,
-    sashConfigs: [
-      { openingType: 'tilt-turn', fillType: 'glass' },
-      { openingType: 'fixed', fillType: 'glass' },
-    ],
-  },
+      { openingType: 'fixed', fillType: 'panel' }
+    ]
+  }
 ];
-

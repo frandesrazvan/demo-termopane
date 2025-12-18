@@ -6,7 +6,7 @@ import { CompanySettings } from '../types';
 // but we keep the frontend interface as default_glass_id and default_hardware_id for consistency
 const toSupabaseFormat = (settings: Omit<CompanySettings, 'id'>) => ({
   company_name: settings.company_name,
-  logo_url: settings.logo_url ?? null,
+  logo_url: settings.logo_url && settings.logo_url.trim() ? settings.logo_url.trim() : null,
   address: settings.address ?? null,
   phone: settings.phone ?? null,
   email: settings.email ?? null,
