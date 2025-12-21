@@ -24,6 +24,8 @@ interface ConfiguratorState {
   updateDimensions: (width: number, height: number) => void;
   /** Update a specific cell's configuration */
   updateCell: (cellId: string, updates: Partial<SashConfig>) => void;
+  /** Update a cell's width ratio */
+  updateCellWidthRatio: (cellId: string, ratio: number) => void;
   /** Set the grid structure and recalculate cells array */
   setGrid: (mullions: number, transoms: number) => void;
   /** Update material IDs (profile, color, glass, hardware) */
@@ -50,6 +52,7 @@ const createDefaultCell = (index: number): SashConfig => ({
   openingType: OpeningType.FIXED,
   fillingType: FillingType.GLASS,
   hasHandle: false,
+  widthRatio: 1,
 });
 
 /**
@@ -85,10 +88,11 @@ const createWindowObjectFromTemplate = (
     }
   }
 
-  // Ensure all cells have unique IDs
+  // Ensure all cells have unique IDs and default widthRatio
   cells = cells.map((cell, index) => ({
     ...cell,
     id: cell.id || generateCellId(index),
+    widthRatio: cell.widthRatio ?? 1,
   }));
 
   // Build complete WindowObject
@@ -176,6 +180,26 @@ export const useConfiguratorStore = create<ConfiguratorState>((set, get) => ({
         ...activeConfig,
         cells: activeConfig.cells.map((cell) =>
           cell.id === cellId ? { ...cell, ...updates } : cell
+        ),
+      },
+    });
+  },
+
+  updateCellWidthRatio: (cellId: string, ratio: number) => {
+    const { activeConfig } = get();
+    if (!activeConfig) {
+      console.warn('Cannot update cell width ratio: no active configuration');
+      return;
+    }
+
+    // Ensure ratio is positive
+    const clampedRatio = Math.max(0.1, ratio);
+
+    set({
+      activeConfig: {
+        ...activeConfig,
+        cells: activeConfig.cells.map((cell) =>
+          cell.id === cellId ? { ...cell, widthRatio: clampedRatio } : cell
         ),
       },
     });

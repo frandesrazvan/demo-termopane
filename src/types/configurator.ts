@@ -37,6 +37,8 @@ export interface SashConfig {
   fillingType: FillingType;
   /** Whether this sash has a handle */
   hasHandle: boolean;
+  /** Width ratio relative to other cells in the same row (default: 1) */
+  widthRatio: number;
 }
 
 /**
@@ -111,7 +113,8 @@ export const PREDEFINED_TEMPLATES: TemplateDefinition[] = [
           id: 'cell-1',
           openingType: OpeningType.TILT_TURN,
           fillingType: FillingType.GLASS,
-          hasHandle: true
+          hasHandle: true,
+          widthRatio: 1
         }
       ]
     }
@@ -133,13 +136,15 @@ export const PREDEFINED_TEMPLATES: TemplateDefinition[] = [
           id: 'cell-1',
           openingType: OpeningType.FIXED,
           fillingType: FillingType.GLASS,
-          hasHandle: false
+          hasHandle: false,
+          widthRatio: 1
         },
         {
           id: 'cell-2',
           openingType: OpeningType.TILT_TURN,
           fillingType: FillingType.GLASS,
-          hasHandle: true
+          hasHandle: true,
+          widthRatio: 1
         }
       ]
     }
@@ -161,19 +166,22 @@ export const PREDEFINED_TEMPLATES: TemplateDefinition[] = [
           id: 'cell-1',
           openingType: OpeningType.FIXED,
           fillingType: FillingType.GLASS,
-          hasHandle: false
+          hasHandle: false,
+          widthRatio: 1
         },
         {
           id: 'cell-2',
           openingType: OpeningType.TILT_TURN,
           fillingType: FillingType.GLASS,
-          hasHandle: true
+          hasHandle: true,
+          widthRatio: 1
         },
         {
           id: 'cell-3',
           openingType: OpeningType.FIXED,
           fillingType: FillingType.GLASS,
-          hasHandle: false
+          hasHandle: false,
+          widthRatio: 1
         }
       ]
     }
@@ -195,7 +203,8 @@ export const PREDEFINED_TEMPLATES: TemplateDefinition[] = [
           id: 'cell-1',
           openingType: OpeningType.TURN_LEFT,
           fillingType: FillingType.PANEL_PVC,
-          hasHandle: true
+          hasHandle: true,
+          widthRatio: 1
         }
       ]
     }
@@ -217,13 +226,15 @@ export const PREDEFINED_TEMPLATES: TemplateDefinition[] = [
           id: 'cell-1',
           openingType: OpeningType.TURN_LEFT,
           fillingType: FillingType.GLASS,
-          hasHandle: true
+          hasHandle: true,
+          widthRatio: 1
         },
         {
           id: 'cell-2',
           openingType: OpeningType.FIXED,
           fillingType: FillingType.PANEL_PVC,
-          hasHandle: false
+          hasHandle: false,
+          widthRatio: 1
         }
       ]
     }

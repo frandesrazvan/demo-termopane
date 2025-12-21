@@ -66,7 +66,7 @@ export default function ConfiguratorControls({
   selectedCellId, 
   onCellSelect 
 }: ConfiguratorControlsProps) {
-  const { activeConfig, selectedTemplateId, loadTemplate, updateDimensions, updateCell, setGrid, updateMaterials } = useConfiguratorStore();
+  const { activeConfig, selectedTemplateId, loadTemplate, updateDimensions, updateCell, updateCellWidthRatio, setGrid, updateMaterials } = useConfiguratorStore();
   const { settings } = useStore();
   
   // Local state for material selection
@@ -148,6 +148,11 @@ export default function ConfiguratorControls({
   const handleCellOpeningTypeChange = (openingType: OpeningType) => {
     if (!selectedCellId) return;
     updateCell(selectedCellId, { openingType });
+  };
+  
+  const handleCellWidthRatioChange = (ratio: number) => {
+    if (!selectedCellId) return;
+    updateCellWidthRatio(selectedCellId, ratio);
   };
   
   // Handle material changes
@@ -271,7 +276,7 @@ export default function ConfiguratorControls({
           </div>
           
           {/* Opening Type Segmented Control */}
-          <div>
+          <div className="mb-4">
             <label className="block text-xs font-medium text-gray-600 mb-2">
               Tip Deschidere
             </label>
@@ -300,6 +305,38 @@ export default function ConfiguratorControls({
               })}
             </div>
           </div>
+          
+          {/* Width Ratio Control (only for cells in rows with multiple cells) */}
+          {activeConfig.grid.mullions > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">
+                Lățime Relativă
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min="0.1"
+                  max="5"
+                  step="0.1"
+                  value={selectedCell.widthRatio ?? 1}
+                  onChange={(e) => handleCellWidthRatioChange(parseFloat(e.target.value))}
+                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+                <input
+                  type="number"
+                  min="0.1"
+                  max="5"
+                  step="0.1"
+                  value={selectedCell.widthRatio ?? 1}
+                  onChange={(e) => handleCellWidthRatioChange(parseFloat(e.target.value) || 1)}
+                  className="w-20 h-12 px-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Raportul lățimii acestei celule față de celelalte din același rând
+              </p>
+            </div>
+          )}
         </div>
       )}
       
@@ -396,11 +433,22 @@ export default function ConfiguratorControls({
                 className="w-full h-12 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
               >
                 <option value="">Selectează seria...</option>
-                {filteredProfileSeries.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.manufacturer ? `${profile.manufacturer} - ` : ''}{profile.name}
-                  </option>
-                ))}
+                {filteredProfileSeries
+                  .sort((a, b) => {
+                    // For doors, prioritize profiles with "usa" or "door" in name
+                    if (activeConfig.type === 'door') {
+                      const aIsDoor = a.name?.toLowerCase().includes('usa') || a.name?.toLowerCase().includes('door');
+                      const bIsDoor = b.name?.toLowerCase().includes('usa') || b.name?.toLowerCase().includes('door');
+                      if (aIsDoor && !bIsDoor) return -1;
+                      if (!aIsDoor && bIsDoor) return 1;
+                    }
+                    return 0;
+                  })
+                  .map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.manufacturer ? `${profile.manufacturer} - ` : ''}{profile.name}
+                    </option>
+                  ))}
               </select>
             </div>
             

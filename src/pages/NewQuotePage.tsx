@@ -1,15 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
-import WindowConfigurator, { WindowConfigData } from '../components/WindowConfigurator';
+import { WindowConfigData } from '../components/WindowConfigurator';
 import { quotesApi } from '../lib/quotesApi';
 import { QuoteItemInput } from '../types/quotes';
 import { useStore } from '../store/useStore';
 import { Plus, Trash2, FileDown } from 'lucide-react';
 import { companySettingsService } from '../services/companySettingsService';
-import { PREDEFINED_TEMPLATES } from '../config/templates';
-import { TemplateDefinition } from '../types/templates';
 import { OfferTab, NewQuotePageProps } from '../types';
 import { calculatePricingTotals } from '../utils/priceCalculator';
 import { useQuoteDraft } from '../hooks/useQuoteDraft';
+import { useConfiguratorStore } from '../store/userConfiguratorStore';
+import ConfiguratorControls from '../components/configurator/ConfiguratorControls';
+import WindowVisualizer from '../components/configurator/WindowVisualizer';
+import { convertWindowObjectToConfigData } from '../utils/windowObjectConverter';
 
 export default function NewQuotePage({ onSave, editQuoteId, onEditCancel }: NewQuotePageProps) {
   const { settings } = useStore();
@@ -21,14 +23,14 @@ export default function NewQuotePage({ onSave, editQuoteId, onEditCancel }: NewQ
   const draft = useQuoteDraft();
   const { clientInfo, setClientInfo, items, currentItemLabel, currentItemQuantity, setCurrentItemLabel, setCurrentItemQuantity, addItem, removeItem, setItems, resetDraft } = draft;
 
-  // Current item configuration
-  const [windowConfig, setWindowConfig] = useState<WindowConfigData | null>(null);
+  // Configurator store
+  const { activeConfig, resetConfig } = useConfiguratorStore();
+  
+  // Cell selection state (for WindowVisualizer <-> ConfiguratorControls communication)
+  const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
+  
   const [errors, setErrors] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [showGlassDetails, setShowGlassDetails] = useState(false);
-  
-  // Template selection
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateDefinition | null>(null);
 
   // Company settings for defaults
   const [companySettings, setCompanySettings] = useState<{
@@ -129,11 +131,22 @@ export default function NewQuotePage({ onSave, editQuoteId, onEditCancel }: NewQ
   }, [items, markupPercent, markupFixed, discountPercent, discountFixed, vatRate]);
 
   const handleAddItem = () => {
-    if (!windowConfig) {
-      setErrors(['Configurația articolului este invalidă']);
+    if (!activeConfig) {
+      setErrors(['Selectează un template și configurează articolul']);
       setActiveTab('configurator');
       return;
     }
+
+    // Convert WindowObject to WindowConfigData format
+    const windowConfig = convertWindowObjectToConfigData(
+      activeConfig,
+      settings,
+      vatRate,
+      0, // markupPercent - applied at quote level
+      0, // markupFixed - applied at quote level
+      0, // discountPercent - applied at quote level
+      0  // discountFixed - applied at quote level
+    );
 
     const validationErrors = addItem(windowConfig, vatRate);
 
@@ -144,7 +157,8 @@ export default function NewQuotePage({ onSave, editQuoteId, onEditCancel }: NewQ
     }
 
     setErrors([]);
-    setWindowConfig(null);
+    resetConfig(); // Reset configurator to show template picker again
+    setSelectedCellId(null); // Clear cell selection
     
     // Switch to price tab to see the new item
     setActiveTab('price');
@@ -198,8 +212,8 @@ export default function NewQuotePage({ onSave, editQuoteId, onEditCancel }: NewQ
       // Reset form (only if not in edit mode, or reset after edit)
       if (!editQuoteId) {
         resetDraft();
-        setWindowConfig(null);
-        setSelectedTemplate(null);
+        resetConfig();
+        setSelectedCellId(null);
         setErrors([]);
         setMarkupPercent(20);
         setMarkupFixed(0);
@@ -222,14 +236,6 @@ export default function NewQuotePage({ onSave, editQuoteId, onEditCancel }: NewQ
     }
   };
 
-  // Get default values for configurator from company settings
-  const getDefaultConfig = useMemo(() => {
-    return {
-      profileId: companySettings.default_profile_series_id || '',
-      glassId: companySettings.default_glass_id || '',
-      hardwareId: companySettings.default_hardware_id || '',
-    };
-  }, [companySettings]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
@@ -371,143 +377,66 @@ export default function NewQuotePage({ onSave, editQuoteId, onEditCancel }: NewQ
       {/* Configurator Tab */}
       {activeTab === 'configurator' && (
         <div className="space-y-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">Configurare Articol</h2>
-            
-            {/* Template Selector */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Selectează Șablon <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={selectedTemplate?.id || ''}
-                onChange={(e) => {
-                  const template = PREDEFINED_TEMPLATES.find(t => t.id === e.target.value);
-                  setSelectedTemplate(template || null);
-                }}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-              >
-                <option value="">Selectează un șablon...</option>
-                {PREDEFINED_TEMPLATES.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-              {!selectedTemplate && (
-                <p className="mt-2 text-sm text-gray-500 italic">
-                  Selectează mai întâi un șablon pentru a începe configurarea.
-                </p>
-              )}
+          {/* Main Configurator Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left: Controls */}
+            <div className="space-y-6">
+              <ConfiguratorControls
+                selectedCellId={selectedCellId}
+                onCellSelect={setSelectedCellId}
+              />
+              
+              {/* Item Label and Quantity */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-4">Detalii Articol</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-2">
+                      Denumire Articol (opțional)
+                    </label>
+                    <input
+                      type="text"
+                      value={currentItemLabel}
+                      onChange={(e) => setCurrentItemLabel(e.target.value)}
+                      placeholder="Ex: Fereastră dormitor"
+                      className="w-full h-12 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-2">
+                      Cantitate <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={currentItemQuantity}
+                      onChange={(e) => setCurrentItemQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-full h-12 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                
+                {/* Add Item Button */}
+                <div className="mt-4">
+                  <button
+                    onClick={handleAddItem}
+                    disabled={!activeConfig}
+                    className="w-full h-12 flex items-center justify-center gap-2 px-6 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Adaugă în coș
+                  </button>
+                </div>
+              </div>
             </div>
             
-            {selectedTemplate ? (
-              <WindowConfigurator 
-                onConfigChange={setWindowConfig}
-                initialProfileId={getDefaultConfig.profileId}
-                initialGlassId={getDefaultConfig.glassId}
-                initialHardwareId={getDefaultConfig.hardwareId}
-                hidePricing={true}
-                template={selectedTemplate}
-                onTemplateApplied={() => {
-                  // Template applied, configurator is now enabled
+            {/* Right: Visualizer */}
+            <div>
+              <WindowVisualizer
+                onCellClick={(cellId) => {
+                  setSelectedCellId(cellId === selectedCellId ? null : cellId);
                 }}
               />
-            ) : (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-                <p className="text-gray-600">Selectează un șablon pentru a configura articolul</p>
-              </div>
-            )}
-
-            {/* Glass Details Section */}
-            {windowConfig && windowConfig.glassPieces.length > 0 && (
-              <div className="mt-6 border border-gray-200 rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => setShowGlassDetails(!showGlassDetails)}
-                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors rounded-t-lg"
-                >
-                  <h3 className="text-sm font-semibold text-gray-800">Detalii sticlă</h3>
-                  {showGlassDetails ? (
-                    <span className="text-gray-600">▲</span>
-                  ) : (
-                    <span className="text-gray-600">▼</span>
-                  )}
-                </button>
-                {showGlassDetails && (
-                  <div className="p-4">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-2 px-3 font-semibold text-gray-700">Nr. buc</th>
-                            <th className="text-right py-2 px-3 font-semibold text-gray-700">Lățime (mm)</th>
-                            <th className="text-right py-2 px-3 font-semibold text-gray-700">Înălțime (mm)</th>
-                            <th className="text-right py-2 px-3 font-semibold text-gray-700">Suprafață (m²)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {windowConfig.glassPieces.map((piece, index) => {
-                            const area = (piece.width_mm / 1000) * (piece.height_mm / 1000) * piece.quantity;
-                            return (
-                              <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                                <td className="py-2 px-3">{piece.quantity}</td>
-                                <td className="py-2 px-3 text-right">{piece.width_mm.toFixed(1)}</td>
-                                <td className="py-2 px-3 text-right">{piece.height_mm.toFixed(1)}</td>
-                                <td className="py-2 px-3 text-right">{area.toFixed(3)}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <p className="text-sm font-semibold text-gray-800">
-                        Total sticlă: <span className="text-blue-600">{windowConfig.glassAreaSqm.toFixed(2)} m²</span>
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Item Label and Quantity */}
-            <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Denumire Articol (opțional)
-                </label>
-                <input
-                  type="text"
-                  value={currentItemLabel}
-                  onChange={(e) => setCurrentItemLabel(e.target.value)}
-                  placeholder="Ex: Fereastră dormitor, Ușă intrare"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cantitate <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={currentItemQuantity}
-                  onChange={(e) => setCurrentItemQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {/* Add Item Button */}
-            <div className="mt-4 sm:mt-6">
-              <button
-                onClick={handleAddItem}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-base"
-              >
-                <Plus className="w-5 h-5" />
-                Adaugă în coș
-              </button>
             </div>
           </div>
 
@@ -616,10 +545,29 @@ export default function NewQuotePage({ onSave, editQuoteId, onEditCancel }: NewQ
                   {/* Material Cost Summary */}
                   <div className="border border-gray-200 rounded-lg p-4">
                     <h3 className="text-sm font-semibold text-gray-800 mb-3">Cost Materiale</h3>
-                    <div className="text-2xl font-bold text-blue-700">
+                    <div className="text-2xl font-bold text-blue-700 mb-3">
                       {totals.totalMaterialCost.toFixed(2)} RON
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Suma costurilor materiale pentru toate articolele</p>
+                    
+                    {/* Detailed Breakdown */}
+                    <div className="mt-4 pt-4 border-t border-gray-200 space-y-2 text-xs">
+                      <div className="flex justify-between text-gray-700">
+                        <span>Total ml Profil:</span>
+                        <span className="font-medium">{totals.totalProfileLengthMeters.toFixed(2)} ml</span>
+                      </div>
+                      <div className="flex justify-between text-gray-700">
+                        <span>Total sqm Sticlă (calculat):</span>
+                        <span className="font-medium">{totals.totalGlassAreaSqm.toFixed(2)} m²</span>
+                      </div>
+                      <div className="flex justify-between text-gray-700">
+                        <span>Total sqm Sticlă (facturat):</span>
+                        <span className="font-medium text-blue-600">{totals.totalGlassAreaBilledSqm.toFixed(2)} m²</span>
+                      </div>
+                      <div className="flex justify-between text-gray-700">
+                        <span>Hardware Kits:</span>
+                        <span className="font-medium">{totals.totalHardwareKitsCount} buc</span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Markup Controls */}

@@ -26,31 +26,50 @@ function calculateCellPositions(
   totalWidth: number,
   totalHeight: number,
   mullions: number,
-  transoms: number
+  transoms: number,
+  cells: Array<{ id: string; widthRatio: number }>
 ): CellPosition[] {
   const positions: CellPosition[] = [];
   
-  // Calculate cell dimensions
-  const cellWidth = (totalWidth - (mullions * PROFILE_WIDTH)) / (mullions + 1);
-  const cellHeight = (totalHeight - (transoms * PROFILE_WIDTH)) / (transoms + 1);
-  
   const rows = transoms + 1;
   const cols = mullions + 1;
+  const cellHeight = (totalHeight - (transoms * PROFILE_WIDTH)) / (transoms + 1);
   
-  // Calculate positions for each cell
+  // Calculate positions for each row
   for (let row = 0; row < rows; row++) {
+    // Get cells for this row
+    const rowStartIndex = row * cols;
+    const rowCells = cells.slice(rowStartIndex, rowStartIndex + cols);
+    
+    // Calculate total ratio for this row
+    const totalRatio = rowCells.reduce((sum, cell) => sum + (cell.widthRatio || 1), 0);
+    
+    // Calculate available width (total width minus mullions)
+    const availableWidth = totalWidth - (mullions * PROFILE_WIDTH);
+    
+    // Calculate cell widths based on ratios
+    let currentX = 0;
     for (let col = 0; col < cols; col++) {
-      const x = col * (cellWidth + PROFILE_WIDTH);
-      const y = row * (cellHeight + PROFILE_WIDTH);
+      const cell = rowCells[col];
+      const ratio = cell?.widthRatio || 1;
+      
+      // Calculate cell width based on ratio
+      const cellWidth = (availableWidth * ratio) / totalRatio;
       
       positions.push({
-        x,
-        y,
+        x: currentX,
+        y: row * (cellHeight + PROFILE_WIDTH),
         width: cellWidth,
         height: cellHeight,
         row,
         col,
       });
+      
+      // Move to next cell position (add cell width + mullion if not last column)
+      currentX += cellWidth;
+      if (col < cols - 1) {
+        currentX += PROFILE_WIDTH;
+      }
     }
   }
   
@@ -60,6 +79,7 @@ function calculateCellPositions(
 /**
  * Render opening symbol based on opening type
  * Triangle points to the handle side
+ * For doors, handle is at 1050mm from bottom; for windows, centered vertically
  */
 function renderOpeningSymbol(
   x: number,
@@ -67,18 +87,33 @@ function renderOpeningSymbol(
   width: number,
   height: number,
   openingType: OpeningType,
-  _hasHandle: boolean // Reserved for future use (e.g., handle position indicator)
+  hasHandle: boolean,
+  isDoor: boolean
 ): JSX.Element | null {
   if (openingType === OpeningType.FIXED) {
     return null;
   }
 
-  // Center point of the cell
+  // Center point of the cell (horizontally)
   const centerX = x + width / 2;
-  const centerY = y + height / 2;
   
-  // Size of the triangle
-  const triangleSize = Math.min(width, height) * 0.15;
+  // For doors: handle at 1050mm from bottom (scaled to cell coordinates)
+  // For windows: centered vertically
+  let centerY: number;
+  if (isDoor && hasHandle) {
+    // Calculate handle position: 1050mm from bottom of the door
+    // If cell height is less than 1050mm, use cell center; otherwise calculate from cell bottom
+    const handleOffsetFromBottom = 1050;
+    const cellBottom = y + height;
+    centerY = Math.max(cellBottom - handleOffsetFromBottom, y + height / 2);
+  } else {
+    centerY = y + height / 2;
+  }
+  
+  // Size of the triangle (larger for doors)
+  const triangleSize = isDoor 
+    ? Math.min(width, height) * 0.2 
+    : Math.min(width, height) * 0.15;
   
   let points: string;
   let fillColor: string;
@@ -287,8 +322,8 @@ export default function WindowVisualizer({ onCellClick }: WindowVisualizerProps)
   const { width, height, grid, cells, type } = activeConfig;
   const { mullions, transoms } = grid;
   
-  // Calculate cell positions
-  const cellPositions = calculateCellPositions(width, height, mullions, transoms);
+  // Calculate cell positions (with width ratios)
+  const cellPositions = calculateCellPositions(width, height, mullions, transoms, cells);
   
   // Calculate SVG viewBox with padding for dimension lines
   const padding = DIMENSION_LINE_OFFSET + DIMENSION_TEXT_OFFSET;
@@ -355,39 +390,38 @@ export default function WindowVisualizer({ onCellClick }: WindowVisualizerProps)
           strokeLinejoin="round"
         />
         
-        {/* Door threshold (if door type) */}
+        {/* Door threshold (Aluminum Prag) - thin silver/grey line instead of thick PVC frame */}
         {type === 'door' && (
-          <rect
-            x={0}
-            y={height - PROFILE_WIDTH / 3}
-            width={width}
-            height={PROFILE_WIDTH / 3}
-            fill="#e5e7eb"
+          <line
+            x1={0}
+            y1={height}
+            x2={width}
+            y2={height}
             stroke="#9ca3af"
-            strokeWidth="1"
+            strokeWidth="2"
+            strokeDasharray="4 2"
           />
         )}
         
-        {/* Layer 3: Mullions (Vertical Dividers) */}
-        {mullions > 0 && (() => {
-          const cellWidth = (width - (mullions * PROFILE_WIDTH)) / (mullions + 1);
-          return Array.from({ length: mullions }, (_, i) => {
-            // Mullion i is positioned after column i
-            const mullionX = (i + 1) * (cellWidth + PROFILE_WIDTH) - PROFILE_WIDTH / 2;
-            return (
-              <rect
-                key={`mullion-${i}`}
-                x={mullionX}
-                y={0}
-                width={PROFILE_WIDTH}
-                height={height}
-                fill="#e5e7eb"
-                stroke="#6b7280"
-                strokeWidth="2"
-              />
-            );
-          });
-        })()}
+        {/* Layer 3: Mullions (Vertical Dividers) - positioned based on cell positions */}
+        {mullions > 0 && cellPositions.map((pos, index) => {
+          // Only draw mullions after columns (not after the last column)
+          if (pos.col === (mullions + 1) - 1) return null;
+          
+          const mullionX = pos.x + pos.width - PROFILE_WIDTH / 2;
+          return (
+            <rect
+              key={`mullion-${index}`}
+              x={mullionX}
+              y={0}
+              width={PROFILE_WIDTH}
+              height={height}
+              fill="#e5e7eb"
+              stroke="#6b7280"
+              strokeWidth="2"
+            />
+          );
+        })}
         
         {/* Layer 4: Transoms (Horizontal Dividers) */}
         {transoms > 0 && (() => {
@@ -465,7 +499,33 @@ export default function WindowVisualizer({ onCellClick }: WindowVisualizerProps)
                 cellInnerWidth,
                 cellInnerHeight,
                 cell.openingType,
-                cell.hasHandle
+                cell.hasHandle,
+                type === 'door'
+              )}
+              
+              {/* Door Handle Icon (if door and has handle) */}
+              {type === 'door' && cell.hasHandle && cell.openingType !== OpeningType.FIXED && (
+                <g>
+                  {/* Handle circle */}
+                  <circle
+                    cx={cellInnerX + cellInnerWidth / 2}
+                    cy={Math.max(cellInnerY + cellInnerHeight - 1050, cellInnerY + cellInnerHeight / 2)}
+                    r="8"
+                    fill="#4b5563"
+                    stroke="#1f2937"
+                    strokeWidth="1.5"
+                  />
+                  {/* Handle lever */}
+                  <line
+                    x1={cellInnerX + cellInnerWidth / 2}
+                    y1={Math.max(cellInnerY + cellInnerHeight - 1050, cellInnerY + cellInnerHeight / 2)}
+                    x2={cellInnerX + cellInnerWidth / 2 + 12}
+                    y2={Math.max(cellInnerY + cellInnerHeight - 1050, cellInnerY + cellInnerHeight / 2)}
+                    stroke="#1f2937"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </g>
               )}
             </g>
           );
