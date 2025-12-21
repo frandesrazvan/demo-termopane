@@ -26,6 +26,13 @@ interface ConfiguratorState {
   updateCell: (cellId: string, updates: Partial<SashConfig>) => void;
   /** Set the grid structure and recalculate cells array */
   setGrid: (mullions: number, transoms: number) => void;
+  /** Update material IDs (profile, color, glass, hardware) */
+  updateMaterials: (updates: {
+    profileSeriesId?: string;
+    colorId?: string;
+    glassTypeId?: string;
+    hardwareId?: string;
+  }) => void;
   /** Reset the entire configuration */
   resetConfig: () => void;
 }
@@ -213,6 +220,21 @@ export const useConfiguratorStore = create<ConfiguratorState>((set, get) => ({
         ...activeConfig,
         grid: newGrid,
         cells: newCells,
+      },
+    });
+  },
+
+  updateMaterials: (updates) => {
+    const { activeConfig } = get();
+    if (!activeConfig) {
+      console.warn('Cannot update materials: no active configuration');
+      return;
+    }
+
+    set({
+      activeConfig: {
+        ...activeConfig,
+        ...updates,
       },
     });
   },
